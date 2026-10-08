@@ -1,0 +1,77 @@
+{
+  "_comment": "models: 填入你的 base_url / api_key / model；roles: 岗位可增删改，model 字段引用 models 的键；pipeline: 编排顺序。",
+  "models": {
+    "main": {
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "YOUR_KEY_HERE(待填)",
+      "model": "gpt-4o-mini",
+      "temperature": 0.7
+    }
+  },
+  "roles": {
+    "director": {
+      "id": "director",
+      "name": "指挥 Director",
+      "model": "main",
+      "system": "你是「项目总指挥 Director」。\n把你收到的整体用户任务，拆解成若干互相独立的工作项（item）。\n每一项要明确：标题、建议由哪个岗位(role)负责、以及交付目标。\n可用的岗位由系统决定，常见有：researcher（调研）、coder（研发）、writer（写作）、reviewer（检验）。\n你只做拆解，不要亲自执行，也不要写代码。\n只输出严格 JSON，格式：\n{\"overview\":\"一句话总览\",\"items\":[{\"title\":\"工作项名\",\"role\":\"岗位名\",\"goal\":\"交付目标\"}]}",
+      "tools": [
+        "web"
+      ],
+      "temperature": 0.3
+    },
+    "planner": {
+      "id": "planner",
+      "name": "规划 Planner",
+      "model": "main",
+      "system": "你是「技术规划师 Planner」。\n基于总指挥(Director)拆解出的工作项，产出一份可顺序执行的步骤计划。\n每一步要指定：由哪个岗位(role)负责、清晰的指令(instruction)、依赖(depends_on)。\n你只做规划，不执行。\n只输出严格 JSON，格式：\n{\"plan\":[{\"role\":\"岗位名\",\"instruction\":\"给该岗位的具体指令\",\"depends_on\":[\"上一步简要说明或空\"]}]}",
+      "tools": [
+        "web"
+      ],
+      "temperature": 0.3
+    },
+    "researcher": {
+      "id": "researcher",
+      "name": "调研 Researcher",
+      "model": "main",
+      "system": "你是「调研专家 Researcher」。\n职责：联网检索资料、阅读网页、整理结论，必要时写入工作区文件。\n善用工具获取真实信息，输出要带要点与来源。\n完成后用中文给出结构化的调研结论。",
+      "tools": [
+        "web",
+        "file"
+      ],
+      "temperature": 0.5
+    },
+    "coder": {
+      "id": "coder",
+      "name": "研发 Coder",
+      "model": "main",
+      "system": "你是「资深工程师 Coder」。\n职责：编写/修改代码与文件、运行命令（编译、测试、git 等）来验证产物。\n优先产出可运行、结构清晰的成果；每完成一项就验证一次。",
+      "tools": [
+        "file",
+        "shell"
+      ],
+      "temperature": 0.4
+    },
+    "verifier": {
+      "id": "verifier",
+      "name": "检验 Verifier",
+      "model": "main",
+      "system": "你是「质量检验员 Verifier」。\n对照【原始任务】与【各岗位交付结果】，判断任务是否真正完成：\n- 交付物是否存在、能否运行/打开；\n- 是否覆盖了用户的核心诉求；\n- 有无明显遗漏或错误。\n只输出严格 JSON，格式：\n{\"passed\":true或false,\"score\":0到100的整数,\"gaps\":[\"未完成的缺口1\",\"缺口2\"],\"verdict\":\"一句话结论\"}",
+      "tools": [
+        "file",
+        "shell"
+      ],
+      "temperature": 0.2
+    }
+  },
+  "pipeline": {
+    "stages": [
+      "director",
+      "planner",
+      "workers",
+      "verifier"
+    ],
+    "max_workers": 1,
+    "verify_rounds": 2
+  },
+  "registryUrl": "http://localhost:8080/plugins.json"
+}

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OmniAgent · 多模型协作智能体</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ========== 左侧栏 ========== -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">◆</div>
+        <div class="brand-name">omniagent</div>
+        <span class="brand-badge">AGENT</span>
+      </div>
+
+      <button class="new-chat" id="newChatBtn">⊕ 新会话</button>
+
+      <button class="side-item" data-goto="plugins"><span class="ic">◈</span> 插件</button>
+
+      <div class="side-section">
+        <div class="side-head">
+          <span>工作区</span>
+          <span class="side-tools"><span class="st">⌕</span><span class="st">⇄</span><span class="st">⊞</span></span>
+        </div>
+        <div class="side-list">
+          <div class="ws-item active" data-goto="run"><span class="ic">▣</span> 默认工作区</div>
+          <div class="ws-item" data-goto="config"><span class="ic">⚙</span> 模型与岗位</div>
+        </div>
+        <div class="side-sub">最近会话</div>
+        <div class="side-list" id="recentRuns"><div class="ws-item ghost">暂无会话</div></div>
+      </div>
+
+      <div class="side-foot">
+        <span class="ws-item ghost" id="moreBtn">… 更多</span>
+        <a class="ws-item ghost" href="http://localhost:8080" target="_blank" rel="noopener">↗ 官方网站</a>
+      </div>
+    </aside>
+
+    <!-- ========== 主区 ========== -->
+    <main class="main">
+      <!-- 顶部栏目 -->
+      <nav class="topbar">
+        <button class="tab active" data-goto="run">会话</button>
+        <button class="tab" data-goto="config">配置</button>
+        <button class="tab" data-goto="plugins">插件中心</button>
+        <button class="tab" data-goto="reports">运行报告</button>
+        <span class="topbar-right"><span class="badge" id="runStatus">待命</span></span>
+      </nav>
+
+      <!-- ========== 会话 / 运行 ========== -->
+      <section class="view active" data-view="run">
+        <div class="hero" id="hero">
+          <div class="hero-title">
+            <span class="hero-logo">◆</span>
+            <h1>探索未至之境</h1>
+            <span class="ver-badge">标准版</span>
+          </div>
+          <p class="hero-sub">指挥拆解 → 规划 → 多岗位并行 → 检验闭环，一条流水线交付完整任务</p>
+        </div>
+
+        <div class="composer" id="composer">
+          <textarea id="taskInput" rows="2" placeholder="描述你想构建的网页 / 应用 / 任务，用自然语言对话，Enter 发送，Shift+Enter 换行"></textarea>
+          <div class="composer-bar">
+            <label class="icon-btn" id="mockToggle" title="演示模式：无需密钥，用内置 mock 模型演示全流程">
+              <span class="ic">＋</span>
+            </label>
+            <span class="mode-tag" id="modeTag">标准模式</span>
+            <span class="spacer"></span>
+            <select id="modelSel" class="mode-sel" title="选择运行使用的模型（整条流水线统一使用）">
+              <option value="">加载模型中…</option>
+            </select>
+            <select id="modeSel" class="mode-sel" title="运行模式">
+              <option value="live">标准模式</option>
+              <option value="mock">演示模式（mock）</option>
+              <option value="terminal">终端模式</option>
+            </select>
+            <button class="send-btn" id="runBtn" title="发送">↑</button>
+          </div>
+        </div>
+
+        <div class="console-wrap" id="consoleWrap" hidden>
+          <div class="console-head" id="consoleHead">
+            <span id="consoleHeadText">实时流水线 · 各岗位的思考 / 工具 / 产出</span>
+          </div>
+          <div class="term-bar" id="termBar" hidden>
+            <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+            <span class="term-title">omni@agent — 终端模式 · 实时输出</span>
+          </div>
+          <div class="console" id="console"><div class="empty">发送任务后，这里会实时显示流水线的每一步…</div></div>
+        </div>
+        <div class="hint muted" id="runHint"></div>
+      </section>
+
+      <!-- ========== 配置 ========== -->
+      <section class="view" data-view="config">
+        <header class="view-head">
+          <h1>配置</h1>
+          <p class="muted">接入你自己的模型（任意 OpenAI 兼容端点，可指向本地端口），增删岗位，调整编排顺序。</p>
+        </header>
+
+        <div class="toolbar">
+          <select id="presetSel"><option value="">套用预设…</option></select>
+          <button class="btn" id="applyPresetBtn">套用</button>
+          <button class="btn ghost" id="reinitBtn">重新生成默认配置</button>
+          <button class="btn primary" id="saveCfgBtn">保存配置</button>
+          <span class="hint muted" id="cfgHint"></span>
+        </div>
+
+        <div class="cfg-grid">
+          <div class="cfg-col">
+            <h3>模型 Models</h3>
+            <div id="modelsList" class="cards"></div>
+            <button class="btn ghost small" id="addModelBtn">+ 添加模型</button>
+            <p class="muted sm">提示：base_url 可填任意 OpenAI 兼容地址，例如本地 Ollama：<code>http://localhost:11434/v1</code></p>
+          </div>
+
+          <div class="cfg-col">
+            <h3>岗位 Roles</h3>
+            <div id="rolesList" class="cards"></div>
+            <button class="btn ghost small" id="addRoleBtn">+ 添加岗位</button>
+
+            <h3 style="margin-top:18px">编排 Pipeline</h3>
+            <div id="pipelineCfg" class="cfg-box"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 插件中心 ========== -->
+      <section class="view" data-view="plugins">
+        <header class="view-head">
+          <h1>插件中心</h1>
+          <p class="muted">已安装的本地插件，以及从官方插件市场一键安装的扩展。</p>
+        </header>
+
+        <h3>已安装插件</h3>
+        <div id="installedPlugins" class="cards"></div>
+
+        <h3 style="margin-top:18px">官方插件市场 <span class="muted sm" id="registrySrc"></span></h3>
+        <div id="marketPlugins" class="cards"></div>
+
+        <div class="install-row">
+          <input type="text" id="pluginUrl" placeholder="或从 URL 安装插件（.js 文件地址）" />
+          <button class="btn" id="installUrlBtn">安装</button>
+          <span class="hint muted" id="pluginHint"></span>
+        </div>
+      </section>
+
+      <!-- ========== 报告 ========== -->
+      <section class="view" data-view="reports">
+        <header class="view-head">
+          <h1>运行报告</h1>
+          <p class="muted">每次运行都会保存一份 Markdown 报告，可在此回看。</p>
+        </header>
+        <div class="reports-grid">
+          <div id="reportsList" class="reports-list"></div>
+          <pre id="reportView" class="report-view">选择左侧一份报告查看…</pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <input type="hidden" id="mockChk" />
+  <script src="./app.js"></script>
+</body>
+</html>

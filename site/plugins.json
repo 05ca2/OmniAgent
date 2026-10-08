@@ -1,0 +1,23 @@
+[
+  {
+    "name": "translator",
+    "version": "1.0",
+    "description": "调用免费翻译 API（MyMemory）把文本翻译成目标语言，调研/写作岗位可用。",
+    "download": "./plugins/translator.js",
+    "tools": ["translate"]
+  },
+  {
+    "name": "calculator",
+    "version": "1.0",
+    "description": "安全数学求值工具，支持四则运算、三角函数、常数等，交给研发/规划岗位做数值计算。",
+    "download": "./plugins/calculator.js",
+    "tools": ["calc"]
+  },
+  {
+    "name": "clock",
+    "version": "1.0",
+    "description": "获取当前时间与日期（支持时区），让智能体在产出中标注时间戳。",
+    "download": "./plugins/clock.js",
+    "tools": ["now"]
+  }
+]

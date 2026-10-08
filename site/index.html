@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OmniAgent · 多模型协作智能体开发工具</title>
+  <meta name="description" content="自带模型、可下载插件、多岗位协作的开源智能体开发工具。在本地用任意 OpenAI 兼容端点驱动多个模型共同工作。" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="bg-mesh"></div>
+
+  <!-- 导航 -->
+  <header class="nav">
+    <div class="nav-inner">
+      <div class="brand"><span class="logo">◆</span> OmniAgent</div>
+      <nav class="nav-links">
+        <a href="#features">特性</a>
+        <a href="#flow">工作流</a>
+        <a href="#plugins">插件中心</a>
+        <a href="#feedback">反馈</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn ghost" href="http://localhost:3000" target="_blank" rel="noopener">打开本地应用 ↗</a>
+        <a class="btn primary" href="#plugins">下载插件</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-text">
+        <span class="pill">开源 · 零依赖 · 本地优先</span>
+        <h1>让多个模型<br><span class="grad">像团队一样协作</span></h1>
+        <p class="lede">OmniAgent 是一个可自带模型的智能体开发工具。接入任意 OpenAI 兼容端点（含本地端口如 <code>localhost:11434</code>），定义多个「岗位」，让指挥、规划、研发、检验各司其职，插件从本官网一键下载。</p>
+        <div class="hero-actions">
+          <a class="btn primary lg" href="#start">开始使用</a>
+          <a class="btn ghost lg" href="#flow">看工作流</a>
+        </div>
+        <div class="hero-meta">纯 Node.js · 无 npm 安装坑 · 终端 / 浏览器皆可</div>
+      </div>
+
+      <div class="hero-term">
+        <div class="term-bar"><span></span><span></span><span></span></div>
+        <pre class="term">
+<span class="c-dim">$ node bin/omni.js serve</span>
+<span class="c-cyan">◆ OmniAgent 本地服务已启动：http://localhost:3000</span>
+
+<span class="c-dim">浏览器打开 → 填写你的模型密钥</span>
+<span class="c-dim">→ 运行任务 →</span>
+<span class="c-vio">▶ 指挥 Director</span>  拆解：调研 / 实现
+<span class="c-vio">▶ 规划 Planner</span>  步骤1 调研 · 步骤2 研发
+<span class="c-yel">└─ [researcher]</span> 联网检索资料…
+<span class="c-yel">└─ [coder]</span>      编写并验证产物…
+<span class="c-grn">▶ 检验 Verifier</span> 通过 · 评分 92
+<span class="c-dim">— 报告已保存</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 特性 -->
+  <section class="section" id="features">
+    <h2 class="sec-title">为什么是 OmniAgent</h2>
+    <p class="sec-sub">不是又一个聊天框，而是一套可编排的多模型工作流。</p>
+    <div class="grid">
+      <div class="card">
+        <div class="ic">🔌</div>
+        <h3>自带模型</h3>
+        <p>填 base_url + api_key + model 即可接 DeepSeek / OpenRouter / Ollama / 通义 / 智谱 / 月之暗面等任意 OpenAI 兼容服务，可指向本地端口。</p>
+      </div>
+      <div class="card">
+        <div class="ic">🧩</div>
+        <h3>可下载插件</h3>
+        <p>文件读写、Shell、联网内置；更多能力从本官网插件中心一键下载，放到本地即生效。</p>
+      </div>
+      <div class="card">
+        <div class="ic">👥</div>
+        <h3>多岗位协作</h3>
+        <p>一个下指令、一个写 plan、不同领域模型分工、一个做检验——全部由你配置，也可直接套预设。</p>
+      </div>
+      <div class="card">
+        <div class="ic">🔁</div>
+        <h3>检验补做回路</h3>
+        <p>Verifier 不通过会自动派发补做任务，反滚雪球、保证交付真正完成。</p>
+      </div>
+      <div class="card">
+        <div class="ic">🖥️</div>
+        <h3>本地优先</h3>
+        <p>数据留在你机器上，默认跑在 <code>localhost:3000</code>，浏览器里可视化看每个岗位的思考与工具调用。</p>
+      </div>
+      <div class="card">
+        <div class="ic">⚡</div>
+        <h3>零依赖</h3>
+        <p>纯 Node.js 内置模块实现，没有脆弱的第三方依赖，克隆即跑、不会卡在安装。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 工作流 -->
+  <section class="section" id="flow">
+    <h2 class="sec-title">一条流水线，四个岗位</h2>
+    <p class="sec-sub">从一句话任务，到被检验通过的交付物。</p>
+    <div class="flow">
+      <div class="step"><div class="num">1</div><div class="st-title">指挥 Director</div><div class="st-desc">把任务拆成互相独立的工作项，指定负责岗位。</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="num">2</div><div class="st-title">规划 Planner</div><div class="st-desc">产出顺序执行计划，明确每步的岗位与依赖。</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="num">3</div><div class="st-title">执行 Workers</div><div class="st-desc">多岗位按 plan 并行/串行工作，调用工具。</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="num">4</div><div class="st-title">检验 Verifier</div><div class="st-desc">核对交付是否完成，不通过自动补做。</div></div>
+    </div>
+  </section>
+
+  <!-- 插件中心 -->
+  <section class="section" id="plugins">
+    <h2 class="sec-title">插件中心</h2>
+    <p class="sec-sub">从本官网下载扩展能力，放到 <code>.omni/plugins/</code> 即生效；也可在本地应用「插件中心」一键安装。</p>
+    <div class="grid" id="pluginCards"><div class="muted">加载中…</div></div>
+  </section>
+
+  <!-- 反馈 -->
+  <section class="section" id="feedback">
+    <h2 class="sec-title">反馈 / 建议</h2>
+    <p class="sec-sub">想要什么插件？遇到什么坑？告诉我们。</p>
+    <form class="feedback" id="feedbackForm">
+      <div class="row2">
+        <input type="text" name="name" placeholder="称呼（选填）" />
+        <input type="email" name="email" placeholder="邮箱（选填，便于回复）" />
+      </div>
+      <select name="type">
+        <option value="bug">Bug 反馈</option>
+        <option value="plugin">想要某个插件</option>
+        <option value="feature">功能建议</option>
+        <option value="other">其他</option>
+      </select>
+      <textarea name="message" rows="4" placeholder="说说你的想法…" required></textarea>
+      <div class="fb-actions">
+        <button class="btn primary" type="submit">提交反馈</button>
+        <span class="hint" id="fbHint"></span>
+      </div>
+    </form>
+  </section>
+
+  <!-- 开始 -->
+  <section class="section start" id="start">
+    <div class="start-box">
+      <h2>三步跑起来</h2>
+      <ol class="steps">
+        <li><code>node bin/omni.js init</code><span>生成 .omni/config.json</span></li>
+        <li><code>node bin/omni.js serve</code><span>浏览器打开 http://localhost:3000，填模型密钥</span></li>
+        <li><code>node bin/omni.js run "你的任务"</code><span>或直接在网页里点「运行」</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div>◆ OmniAgent · 多模型协作智能体开发工具</div>
+    <div class="muted">本地优先 · 开源 · 零依赖</div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+  <script src="./site.js"></script>
+</body>
+</html>
