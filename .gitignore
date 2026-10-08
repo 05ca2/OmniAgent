@@ -1,0 +1,52 @@
+# Node 模块（本地开发可能有的）
+node_modules/
+
+# 编译产物和日志
+dist/
+build/
+*.log
+npm-debug.log*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 运行时文件（不需要版本控制）
+.omni/config.json
+.omni/runs/
+.omni/plugins/
+
+# IDE 配置（可选）
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 环境配置（不要泄露密钥！）
+.env
+.env.local
+.env.production
+
+# 隐私数据
+*.pem
+*.key
+*.p12
+
+# 密文缓存
+package-lock.json
+yarn.lock
+
+# 本地构建产物
+*.tgz
+*.tar.gz
+
+# 工作流目录
+.github/workflows/
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# macOS 注意
+*.DS_Store
