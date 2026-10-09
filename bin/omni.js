@@ -184,7 +184,7 @@ const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL('../pac
 const COMMANDS = [
   ['/agents',  'Switch agent · 切换岗位'],
   ['/open',    'Open sub-session · 打开子会话详情（规划/执行/检验）'],
-  ['/models',  'List models · 模型列表（供应商/显示名）'],
+  ['/models',  'Select model · 打开模型选择窗口（/models add 添加）'],
   ['/models add', 'Add models · 批量添加 OpenAI 兼容模型'],
   ['/mock',    'Toggle mock mode · 演示模式（无需密钥）'],
   ['/hoa-loop', 'Multi-model loop · 多模型协作流水线（/hoa-loop <任务>）'],
@@ -995,16 +995,7 @@ async function runInteractive(baseCfg, flags, plugins) {
         else startModelWizard();
         return true;
       }
-      const list = Object.entries(cfg.models || {});
-      if (!list.length) { push(yellow('尚未配置任何模型。') + grey('输入 /models add 批量添加 OpenAI 兼容模型')); return true; }
-      push(bold(`已配置模型 ${list.length} 个`) + grey('（/models add 添加 · /model <键名> 统一切换）'));
-      for (const [id, m] of list) {
-        const prov = m.provider || guessProvider(m.base_url);
-        const disp = m.display || m.model;
-        push('  ' + cyan(disp));
-        push(grey(`      键名 ${id} · 供应商 ${prov}`));
-        push(grey(`      model ${m.model} @ ${m.base_url} · key ${maskKey(m.api_key)}`));
-      }
+      openPicker(); // /models → 打开 Select model 小窗（模型明细可用 /status 查看）
       return true;
     } else if (t.startsWith('/open')) {
       const arg = t.slice(5).trim();
@@ -1303,6 +1294,19 @@ async function runInteractive(baseCfg, flags, plugins) {
   }
   function onMouse(col, row, press, btn) {
     if (!press) return;
+    if (btn === 35) { // 鼠标移动（无按键）：命令弹层高亮跟随悬停位置
+      for (const z of clickZones) {
+        if (row >= z.y1 && row <= z.y2 && col >= z.x1 && col <= z.x2) {
+          if (z.act.t === 'cmd') {
+            const e = popupEntries();
+            const idx = e ? e.findIndex(([c]) => c === z.act.cmd) : -1;
+            if (idx >= 0 && idx !== popupSel) { popupSel = idx; render(); }
+          }
+          return;
+        }
+      }
+      return;
+    }
     // 滚轮：主会话里翻看历史记录（64=上滚 65=下滚）
     if (btn === 64 || btn === 65) {
       if (view || settings || picker) return;
@@ -1328,12 +1332,12 @@ async function runInteractive(baseCfg, flags, plugins) {
   function enterAltScreen() {
     if (altOn) return;
     altOn = true;
-    out('\x1b[?1049h\x1b[?1h\x1b[2J\x1b[H' + (IS_TTY ? '\x1b[?1000h\x1b[?1006h' : '')); // 独立窗口 + 开启鼠标点击上报
+    out('\x1b[?1049h\x1b[?1h\x1b[2J\x1b[H' + (IS_TTY ? '\x1b[?1000h\x1b[?1003h\x1b[?1006h' : '')); // 独立窗口 + 鼠标点击/移动上报（移动用于弹层高亮跟随）
   }
   function leaveAltScreen() {
     if (!altOn) return;
     altOn = false;
-    out((IS_TTY ? '\x1b[?1006l\x1b[?1000l' : '') + '\x1b[?1l\x1b[?1049l'); // 关鼠标 + 还原原终端内容
+    out((IS_TTY ? '\x1b[?1006l\x1b[?1003l\x1b[?1000l' : '') + '\x1b[?1l\x1b[?1049l'); // 关鼠标 + 还原原终端内容
   }
   function exitTui() {
     if (busyTick) { clearInterval(busyTick); busyTick = null; }
@@ -1366,6 +1370,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     globalThis.__OMNI_TEST = {
       getState: () => ({
         busy, clar: !!clar, mw: !!mw, view, settings: !!settings,
+        popupOpen, popupSel,
         transcript: transcript.map(String),
         subs: [...subs.values()].map((x) => ({ idx: x.idx, key: x.key, title: x.title, status: x.status, lines: x.lines.map(String) })),
         zones: clickZones.map((z) => ({ t: z.act && z.act.t, y1: z.y1, y2: z.y2, x1: z.x1, x2: z.x2, act: z.act })),
