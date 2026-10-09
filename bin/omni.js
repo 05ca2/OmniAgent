@@ -855,9 +855,9 @@ async function runInteractive(baseCfg, flags, plugins) {
     for (let i = 0; i < H; i++) {
       const l = main[i] || '';
       const r = right[i] || '';
-      const bl = l ? '' : bg[i].slice(0, MW);
+      const bl = l ? '' : bg[i].slice(0, MW).padEnd(MW);
       const br = r ? '' : bg[i].slice(MW + 3).padEnd(RW);
-      rows.push((l ? vpad(l, MW) : grey(bl)) + grey(' │ ') + (r ? vpad(r, RW) : grey(br)));
+      rows.push((l ? vpad(l, MW) : grey(bl)) + cyan(' ┃ ') + (r ? vpad(r, RW) : grey(br)));
     }
     // 光标定位回输入行内（main 倒数第 3 行 = inputRow，「 ❯ 」后）
     const typedO = line ? cutPlain(line, Math.max(8, MW - 8)) : '';
