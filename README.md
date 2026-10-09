@@ -33,27 +33,39 @@ npm install -g .
 
 > 不想装全局命令？也可以始终用 `node bin/omni.js` 代替 `omniagent`，效果完全一样。
 
-### 3. 初始化配置
+### 3. 初始化配置（交互式）
 
 ```bash
 omniagent init
 ```
 
-会在当前目录生成 `.omni/config.json`（含预设岗位）。编辑它，填入你的模型 `api_key`：
+会**在终端里直接问你**三件事，填完即就绪（所有岗位统一使用，之后可手工改成多模型协作）：
 
-```json
-"models": {
-  "main": { "base_url": "https://api.openai.com/v1", "api_key": "sk-...", "model": "gpt-4o" }
-}
+```
+初始化 OmniAgent（预设 full）
+填写 API 信息（所有岗位模型将统一使用，之后可手工改为多模型协作）：
+API base_url (https://api.openai.com/v1):
+API key: ********
+模型名 (gpt-4o-mini):
+✓ 配置已写入：D:\...\OmniAgent\.omni\config.json
+✓ 初始化完成 ✓  直接运行  omniagent  即可进入界面（无需任何参数）。
 ```
 
+> 非交互环境（如管道 / CI）下 `init` 会先生成带空密钥的配置文件，并提示你之后手工补 `api_key`，
+> 或在真实终端重跑 `omniagent init` 交互式填写。
+>
+> 想接入本地模型（Ollama 等）？`API base_url` 填 `http://localhost:11434/v1` 即可。
+
 ### 4. 开始使用
+
+初始化结束（或已填好密钥）后，**直接敲命令即可进入界面**，无需任何参数：
 
 ```bash
 omniagent
 ```
 
-直接回车进入交互界面 🎉
+> 在不带参数的情况下运行 `omniagent`（且处于终端）会自动进入交互界面；若尚未 `init` 会提示你先初始化。
+> 想跑单次任务而非交互，可用 `omniagent run "你的任务"`。
 
 **还没有 API 密钥？** 先体验全流程：进入界面后输入 `/mock` 切换演示模式（无需任何密钥），
 或者单次执行 `omniagent run "调研 RAG 主流方案" --mock`。

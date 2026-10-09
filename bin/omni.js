@@ -36,11 +36,50 @@ OmniAgent —— 多模型协作智能体开发工具
   preset apply <name>          套用某预设的岗位与流水线（保留你的 models）
   help                         显示本帮助
 
+提示：直接运行不带参数的  omniagent  即可进入交互界面。
+
 示例：
   node bin/omni.js init
   node bin/omni.js run "用 Python 写一个贪吃蛇游戏并跑通" --mock
   node bin/omni.js run "调研 RAG 的主流方案" --preset research
 `;
+
+// ---- 交互式输入辅助（仅在真正终端下使用）----
+function ask(q, def) {
+  return new Promise((res) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${q}${def ? ' (' + def + ')' : ''}: `, (a) => { rl.close(); res(a.trim() || def || ''); });
+  });
+}
+function askSecret(q) {
+  return new Promise((res) => {
+    process.stdout.write(`${q}: `);
+    if (!process.stdin.isTTY) { // 非终端（管道）：退化为明文读取
+      let buf = '';
+      process.stdin.once('data', (d) => res(d.toString().replace(/[\r\n]+$/, '')));
+      return;
+    }
+    process.stdin.setRawMode(true);
+    let buf = '';
+    const onData = (c) => {
+      const s = c.toString();
+      if (s === '\r' || s === '\n') {
+        process.stdout.write('\n');
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', onData);
+        res(buf);
+      } else if (s === '' || s === '') { // esc / ctrl-c
+        process.stdout.write('\n');
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', onData);
+        res('');
+      } else if (s === '') { // backspace
+        if (buf) { buf = buf.slice(0, -1); process.stdout.write(' '); }
+      } else { buf += s; process.stdout.write('*'); }
+    };
+    process.stdin.on('data', onData);
+  });
+}
 
 function parseFlags(argv) {
   const pos = [];
@@ -588,10 +627,22 @@ async function main() {
     ensureDirs();
     const cfg = buildConfigFromPreset(name);
     cfg.registryUrl = 'http://localhost:8080/plugins.json';
-    saveConfig(cfg);
-    ui.ok(`已生成配置（预设 ${name}）→ ${CONFIG_PATH}`);
-    ui.info('下一步：编辑该文件，把 models.main.api_key 换成你的密钥；可增删 roles、改成不同模型实现多模型协作。');
-    ui.info('然后运行：node bin/omni.js run "你的任务"');
+
+    if (process.stdin.isTTY) {
+      ui.header(`初始化 OmniAgent（预设 ${name}）`);
+      ui.info('填写 API 信息（所有岗位模型将统一使用，之后可手工改为多模型协作）：');
+      const base = await ask('API base_url', 'https://api.openai.com/v1');
+      const key = await askSecret('API key');
+      const model = await ask('模型名', 'gpt-4o-mini');
+      for (const m of Object.values(cfg.models)) { m.base_url = base; m.api_key = key; m.model = model; }
+      saveConfig(cfg);
+      ui.ok(`配置已写入：${CONFIG_PATH}`);
+    } else {
+      saveConfig(cfg);
+      ui.ok(`已生成配置（预设 ${name}）→ ${CONFIG_PATH}`);
+      ui.info('请将 models.*.api_key 替换为你的密钥，或在终端中重跑 omniagent init 交互式填写。');
+    }
+    ui.ok('初始化完成 ✓  直接运行  omniagent  即可进入界面（无需任何参数）。');
     return;
   }
 

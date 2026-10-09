@@ -3,7 +3,7 @@
   "models": {
     "main": {
       "base_url": "https://api.openai.com/v1",
-      "api_key": "YOUR_KEY_HERE(待填)",
+      "api_key": "",
       "model": "gpt-4o-mini",
       "temperature": 0.7
     }
