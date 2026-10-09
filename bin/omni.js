@@ -259,6 +259,35 @@ async function runInteractive(baseCfg, flags, plugins) {
     return L.slice(0, H);
   }
 
+  // Codex 风格欢迎屏：顶栏 + 水平居中暗色标志 + 输入提示（右侧栏目由 render 统一合成）
+  function welcomeLines(MW, H) {
+    const head = [
+      bold('> OmniAgent') + grey('  (v' + VERSION + ')'),
+      '  ' + grey(process.cwd()),
+      '  ' + grey('permissions: ') + yellow('YOLO mode'),
+    ];
+    const logo = LOGO_LINES.map(grey);
+    const bottom = [
+      grey('Ask anything…') + '█',
+      grey('tab agents   ctrl+p commands'),
+    ];
+    const used = head.length + 1 + logo.length + bottom.length;
+    const pad = Math.max(0, Math.floor((H - used) / 2));
+    const m = [];
+    m.push(...head);
+    m.push('');
+    for (let i = 0; i < pad; i++) m.push('');
+    for (const l of logo) {
+      const w = vlen(l);
+      const padL = Math.max(0, Math.floor((MW - w) / 2));
+      m.push(' '.repeat(padL) + l);
+    }
+    for (let i = 0; i < pad; i++) m.push('');
+    while (m.length < H - bottom.length) m.push('');
+    m.push(...bottom);
+    return m.slice(0, H);
+  }
+
   function render() {
     const W = process.stdout.columns || 100;
     const H = Math.max(12, (process.stdout.rows || 30) - 1);
@@ -268,6 +297,10 @@ async function runInteractive(baseCfg, flags, plugins) {
     // ---- 侧栏 ----
     const sb = sidebarLines(H, SW);
 
+    let main;
+    if (!started) {
+      main = welcomeLines(MW, H);
+    } else {
     // ---- 主区 ----
     const pop = popupEntries();
     let popRows = [];
@@ -303,7 +336,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     const showN = Math.max(1, H - fixedRows);
     const head = transcript.length > showN ? grey('… （上方还有 ' + (transcript.length - showN) + ' 行）') : '';
     const body = transcript.slice(-showN);
-    const main = [];
+    main = [];
     if (head) main.push(cutPlain(head, MW));
     for (const t of body) {
       if (t === '\n') { main.push(''); continue; }
@@ -315,6 +348,8 @@ async function runInteractive(baseCfg, flags, plugins) {
     while (main.length < showN) main.push('');
     main.splice(0, Math.max(0, main.length - showN));
     main.push(...popRows, inputRow, agRow, hintRow);
+
+    }
 
     // ---- 合成双栏 ----
     const rows = [];
@@ -378,7 +413,14 @@ async function runInteractive(baseCfg, flags, plugins) {
       const rows = process.stdout.rows || 30;
       const pad = Math.max(1, Math.floor((rows - LOGO_LINES.length - 8) / 2));
       for (let i = 0; i < pad; i++) push('');
-      for (const l of LOGO_LINES) push(grey(l));
+      const W0 = process.stdout.columns || 100;
+      const SW0 = Math.min(38, Math.max(26, Math.floor(W0 * 0.3)));
+      const MW0 = W0 - SW0 - 1;
+      for (const l of LOGO_LINES) {
+        const w = vlen(l);
+        const padL = Math.max(0, Math.floor((MW0 - w) / 2));
+        push(' '.repeat(padL) + grey(l));
+      }
       for (let i = 0; i < pad; i++) push('');
     }
     push(grey('❯ ') + bold(t));
@@ -453,7 +495,7 @@ async function runInteractive(baseCfg, flags, plugins) {
   }
 
   // 启动画面
-  out('\x1b[2J\x1b[H\n' + LOGO_LINES.map((l) => grey(l)).join('\n') + '\n');
+  // 欢迎屏（与 Codex 一致：顶栏 + 居中标志 + 右侧栏目）由下方 render() 绘制
   push(dim('欢迎使用 OmniAgent 终端模式 —— 直接输入任务，或输入 / 查看命令。tab 切换岗位，ctrl+p 命令面板。'));
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
