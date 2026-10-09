@@ -110,16 +110,44 @@ tab for agents · ? for shortcuts
 | （直接输入文字 + Enter） | 作为任务跑一次编排 |
 | `tab` | 切换岗位（输入框下方状态行实时更新） |
 | `ctrl+p` | 展开 / 收起命令面板 |
-| `esc` | 中断当前运行 / 清空输入 |
+| `esc` ×2（900ms 内连按） | 中断当前正在运行的任务（按一次只提示，防误触） |
+| `esc` | 清空输入 / 关闭命令面板 / 取消添加模型向导 |
 | `ctrl+c` | 退出 |
 | `/mock` | 切换演示模式（无需密钥） |
 | `/model <id>` | 切换本次会话统一使用的模型，如 `/model main` |
+| `/models` | 列出全部模型：显示名 / 供应商 / 键名 / model id / 接口地址 |
+| `/models add` | 批量添加 OpenAI 兼容模型（向导式，见下） |
 | `/status` | 查看模型 / 岗位 / 插件状态 |
 | `/reload` | 重新加载 `.omni/config.json`（改了配置不用重启） |
 | `/clear` | 清空对话 |
 
 单次执行（不进交互）：`omniagent run "你的任务"`（可加 `--mock` / `--preset`）。
 管道或非 TTY 下输出自动去色，方便重定向到文件。
+
+### 边跑边输入（排队执行）
+
+模型在工作中时你**依然可以打字**，回车即加入队列（提示行显示 `✉ 已排队 N 条`），
+当前任务结束后自动按序继续执行。想停下来就**连按两次 esc**。
+
+### 实时推理进度
+
+输入框上方会实时显示 `⠋ 推理中 3.4s · 调用 deepseek-chat · 工具:...`，
+若模型支持推理流（`reasoning_content`，如 DeepSeek R1 / OpenRouter 上的推理模型），
+还会滚动显示模型当前的思考原文；每段思考结束会在对话流留下 `✽ Thought: 3.4s`。
+
+### 批量添加模型（`/models add`）
+
+只接受 **OpenAI 兼容接口**。向导逐项询问，一个模型 5 问：
+
+1. 供应商显示名称（如 `OpenRouter` / `DeepSeek` / `LM Studio`）
+2. 接口地址 URL（必须以 `http(s)://` 开头，如 `https://openrouter.ai/api/v1`）
+3. API Key（本地服务可填 `local`）
+4. 模型 ID（如 `deepseek/deepseek-r1`、`gpt-4o-mini`）
+5. 模型显示名称（直接回车 = 同模型 ID）
+
+填完一个后会问「继续添加下一个？」，输 `y` 接着加，直接回车则**一次性保存全部**并写入
+`.omni/config.json`（键名由模型 ID 自动生成，重名自动加后缀）。随时按 `esc` 取消。
+命令行下 `omniagent models` 也能列出同样的信息。
 
 ## 本地 Web 应用
 
@@ -140,6 +168,9 @@ omniagent site         # 启动官网 http://localhost:8080
 - **反馈**：底部表单提交后落地到 `site/feedback.json`。
 
 ## 模型接入（OpenAI 兼容）
+
+界面运行在终端的**独立窗口**（alternate screen buffer）里，退出后完全还原你原来的终端内容，
+不会留下任何滚动残留；改变窗口大小会自动重排两栏布局。
 
 在 `models` 里加任意多个，每个填 `base_url` / `api_key` / `model`。`base_url` 可指向任意端点，
 包括本地：`http://localhost:11434/v1`（Ollama）。兼容：OpenAI、DeepSeek、OpenRouter、Ollama、
