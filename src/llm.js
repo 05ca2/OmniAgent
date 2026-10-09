@@ -21,7 +21,7 @@ export async function chatCompletion(model, messages, tools = [], opts = {}) {
   const headers = { 'content-type': 'application/json' };
   if (model.api_key) headers['authorization'] = `Bearer ${model.api_key}`;
 
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: opts.signal });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(`LLM 请求失败 ${res.status} ${res.statusText}: ${txt.slice(0, 600)}`);

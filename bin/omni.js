@@ -9,6 +9,7 @@ import { OMNI_DIR, PLUGIN_DIR, CONFIG_PATH, RUNS_DIR, configExists, loadConfig, 
 import { PRESETS, buildConfigFromPreset, listPresets } from '../src/presets.js';
 import { loadPlugins } from '../src/plugins/index.js';
 import { runPipeline } from '../src/orchestrator.js';
+import { chatCompletion } from '../src/llm.js';
 import { renderReport } from '../src/report.js';
 import { cliTrace } from '../src/trace.js';
 import { startServer } from '../src/server.js';
@@ -25,12 +26,13 @@ OmniAgent —— 多模型协作智能体开发工具
   run "<任务>" [--mock] [--preset <name>]
                                运行一次多模型编排流水线（指挥→规划→执行→检验）
   chat [--mock] [--preset <name>]
-                               进入 opencode 风格双栏终端界面（左对话流+右工作树）。
-                               规划/执行/检验各自在独立子会话中运行，主会话只显示指挥的
-                               思考与下达的命令；点右栏子会话或 /open <n> 打开详情页。
-                               实时展示推理进度；模型工作时仍可输入（自动排队）；
+                               进入双栏终端界面（左对话流 + 右工作树）。
+                               默认：单个模型直接对话（无需 skill）。
+                               输入 /hoa-loop <任务> 启动多模型协作流水线（规划/执行/检验各自在
+                               独立子会话运行，主会话只显示指挥的思考与下达命令；需先装 skill）。
+                               实时展示推理进度；模型工作时仍可输入（自动排队）；滚轮/↑↓ 翻看历史；
                                连按两次 esc 中断；命令弹层可直接点击；右下角 ⚙ 设置可添加模型
-                               会话命令：/open /agents /models /mock /model /plugins /reload /status /clear /help /exit
+                               会话命令：/hoa-loop /model /settings /open /agents /models /mock /plugins /reload /status /clear /help /exit
   window                       在独立的终端窗口中打开 OmniAgent 界面
   serve [--port 3000]          启动本地 Web 服务，浏览器打开 http://localhost:3000 使用
   site [--port 8080]           启动官方官网（含插件中心 / 反馈），默认 http://localhost:8080
@@ -124,6 +126,7 @@ const grey = (s) => (IS_TTY ? `\x1b[90m${s}\x1b[0m` : String(s));
 const yellow = (s) => (IS_TTY ? `\x1b[33m${s}\x1b[0m` : String(s));
 const green = (s) => (IS_TTY ? `\x1b[32m${s}\x1b[0m` : String(s));
 const magenta = (s) => (IS_TTY ? `\x1b[95m${s}\x1b[0m` : String(s)); // 最终输出专用色
+const red = (s) => (IS_TTY ? `\x1b[31m${s}\x1b[0m` : String(s)); // 错误提示
 // 深色输入条背景（内置 fg 重置不吞背景色）
 const barBg = (s) => (IS_TTY ? `\x1b[48;5;236m${s}\x1b[0m` : String(s));
 const fgDim = (s) => (IS_TTY ? `\x1b[90m${s}\x1b[39m` : String(s));
@@ -184,7 +187,9 @@ const COMMANDS = [
   ['/models',  'List models · 模型列表（供应商/显示名）'],
   ['/models add', 'Add models · 批量添加 OpenAI 兼容模型'],
   ['/mock',    'Toggle mock mode · 演示模式（无需密钥）'],
-  ['/model',   'Use one model for all roles · 统一模型'],
+  ['/hoa-loop', 'Multi-model loop · 多模型协作流水线（/hoa-loop <任务>）'],
+  ['/settings', 'Settings · 设置（岗位模型/并发/核查轮数/添加模型）'],
+  ['/model',   'Select model · 选择/切换模型（界面）'],
   ['/plugins', 'List installed plugins · 插件列表'],
   ['/reload',  'Reload config · 重载配置'],
   ['/status',  'Session status · 会话状态'],
@@ -270,10 +275,14 @@ async function runInteractive(baseCfg, flags, plugins) {
   let clar = null; // 澄清问卷状态 { questions, idx, answers, resolve }
   let view = null; // 当前打开的子会话详情页（子会话 key，null=主会话）
   let viewOffset = 0; // 详情页向上滚动的行数（0=跟随末尾）
+  let scrollOffset = 0; // 主会话向上翻看历史记录的行数（0=跟随末尾，滚轮/↑↓ 控制）
+  let picker = null; // 选择模型界面 { q, sel }（null=关闭）
+  let settings = null; // 设置页 { sel }（null=关闭）
   let curStageKey = null;
   let curRoute = 'main'; // 当前 trace 路由：'main' 或子会话 key
   let curActivity = ''; // 主界面忙碌行显示的当前动作
   let mainReasonBuf = ''; // 主会话推理流缓冲（指挥的思考原文）
+  let chatHistory = []; // 单模型对话历史（仅单模型模式累积，多模型协作时清空）
   const subs = new Map(); // 子会话：key -> { key, idx, title, sub, lines, sbuf, reasonBuf, status, stage }
   const clickZones = []; // 每次渲染重建的鼠标点击热区 {x1,y1,x2,y2,act}
   const transcript = []; // 主区对话行（已带 ANSI）
@@ -675,23 +684,31 @@ async function runInteractive(baseCfg, flags, plugins) {
     const logoRows = MW >= 54 ? BIG_LOGO : [brandLine(MW)];
     const logoN = logoRows.length + 1; // +1 空行
 
-    const fixedRows = logoN + 1 + popRows.length + 1 + 1 + busyRows.length; // logo+input+popup+agent+hints+busy
-    const showN = Math.max(1, H - fixedRows);
-    const head = transcript.length > showN ? grey('… （上方还有 ' + (transcript.length - showN) + ' 行）') : '';
-    const body = transcript.slice(-showN);
-    main = [];
-    if (head) main.push(cutPlain(head, MW));
-    for (const t of body) {
-      if (t === '\n') { main.push(''); continue; }
-      for (const l of vwrap(t.replace(/\n/g, ''), MW)) main.push(l);
+    // 把全部会话记录折叠成显示行，再按 scrollOffset 取尾部窗口（滚轮/↑↓ 翻历史）
+    const allLines = [];
+    for (const t of transcript) {
+      if (t === '\n') { allLines.push(''); continue; }
+      for (const l of vwrap(t.replace(/\n/g, ''), MW)) allLines.push(l);
     }
-    // 流式中的文本占一行
-    if (streamBuf) main.push(...vwrap('  ' + streamBuf.replace(/\n/g, ' ').slice(-400), MW));
+    if (streamBuf) allLines.push(...vwrap('  ' + streamBuf.replace(/\n/g, ' ').slice(-400), MW));
 
-    while (main.length < showN) main.push('');
-    main.splice(0, Math.max(0, main.length - showN));
-    main.unshift(...logoRows, '');
-    main.push(...busyRows, ...popRows, inputRow, agRow, hintRow);
+    const foot = [...busyRows, ...popRows, inputRow, agRow, hintRow];
+    const headroom = Math.max(2, H - logoN - foot.length); // 正文可用行数
+    scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, allLines.length - 1)));
+    const end = allLines.length - scrollOffset;
+    const start = Math.max(0, end - headroom);
+    const body = allLines.slice(start, end);
+    // 硬钳制正文行数：即使 emoji/宽度误判导致折行误差，也不会把左上角标识顶出屏幕
+    while (body.length < headroom) body.push('');
+    body.length = headroom;
+    main = [...logoRows, '']; // 标识永远固定在左上角，不随会话滚动
+    if (start > 0) main.push(grey(`…（↑ 还有 ${start} 行历史 · 滚轮/↑↓ 翻看）`));
+    const tail = start > 0 ? headroom - 1 : headroom;
+    const vis = body.slice(-tail);
+    while (vis.length < tail) vis.push('');
+    main.push(...vis);
+    main.push(...foot);
+    if (main.length > H) main.length = H; // 双保险：绝不超屏（防止整屏上滚顶掉标识）
     // 命令弹层点击热区：点击即直接执行该命令（主屏行号 = main 下标 + 1）
     if (popShow.length) {
       const popBase = H - 3 - popRows.length; // popRows 第一行（空行）所在 1-based 行
@@ -706,6 +723,7 @@ async function runInteractive(baseCfg, flags, plugins) {
 
     // ---- 子会话详情页：独立窗口，所有思考/工作过程都在这里 ----
     if (view) {
+      clickZones.length = 0; // 覆盖层：丢弃主区热区，重建本页热区
       const s = subs.get(view);
       if (!s) { view = null; }
       else {
@@ -731,6 +749,89 @@ async function runInteractive(baseCfg, flags, plugins) {
         out('\x1b[H\x1b[2J' + rows2.join('\n') + '\x1b[?25l'); // 详情页无输入框，隐藏光标
         return;
       }
+    }
+
+    // ---- 选择模型界面：居中弹窗，搜索 + 按供应商分组 ----
+    if (picker) {
+      clickZones.length = 0;
+      const rows = pickerRows();
+      picker.sel = Math.max(0, Math.min(picker.sel, rows.length - 1));
+      const BW = Math.min(58, Math.max(40, W - 8));
+      const modelIdxs = rows.map((r, i) => (r.kind === 'model' ? i : -1)).filter((i) => i >= 0);
+      const lines = [];
+      const title = ' Select model ';
+      lines.push(cyan('┌' + title + '─'.repeat(Math.max(2, BW - title.length - 2)) + '┐') + grey('  esc 关闭'));
+      const q = ' │ Search: ' + (picker.q || fgDim('输入即搜索…'));
+      lines.push(cutPlain(q + ' '.repeat(Math.max(1, BW + 2 - vlen(q))), BW + 4) + cyan(' │'));
+      lines.push(cyan(' │' + '─'.repeat(BW) + '│'));
+      if (!rows.length) lines.push(cutPlain(cyan(' │ ') + grey('没有匹配的模型'), BW + 4) + cyan(' │'));
+      rows.forEach((r, i) => {
+        const sel = i === picker.sel;
+        let inner;
+        if (r.kind === 'provider') inner = magenta(' │ ' + r.name);
+        else {
+          const cur = r.id === chatModel ? green('● ') : '  ';
+          const name = cur + (sel ? bold(r.label) : r.label);
+          const right = grey(r.m.model.length > 18 ? r.m.model.slice(0, 18) : r.m.model);
+          const pad = Math.max(1, BW - 2 - vlen(name) - vlen(right));
+          inner = cyan(' │ ') + name + ' '.repeat(pad) + right;
+        }
+        const rowStr = sel
+          ? '\x1b[48;5;208m\x1b[38;5;16m' + cutPlain(inner + ' ', BW + 4) + '\x1b[0m'
+          : cutPlain(inner, BW + 4) + (r.kind === 'provider' ? '' : cyan(' │'));
+        lines.push(rowStr);
+        if (r.kind === 'model') {
+          const y = lines.length + 1; // 该行在屏幕上的 1-based 行号
+          clickZones.push({ x1: 2, y1: y, y2: y, x2: W - 12, act: { t: 'pick', id: r.id } });
+        }
+      });
+      lines.push(cyan(' └' + '─'.repeat(BW) + '┘'));
+      lines.push(grey('   ↵ 选择 · ↑↓ 移动 · 输入即搜索 · 点击可选 · esc 关闭'));
+      const padTop = Math.max(0, Math.floor((H - lines.length) / 3));
+      const page = [];
+      for (let i = 0; i < padTop; i++) page.push('');
+      page.push(...lines);
+      page.length = H;
+      while (page.length < H) page.push('');
+      out('\x1b[?25h\x1b[H\x1b[2J' + page.join('\n') + '\x1b[?25l');
+      return;
+    }
+
+    // ---- 设置页：岗位模型映射 + hoa-loop 个性化 + 添加模型 ----
+    if (settings) {
+      clickZones.length = 0;
+      const items = settingsItems();
+      settings.sel = Math.max(0, Math.min(settings.sel, items.length - 1));
+      const lines = [];
+      lines.push(bold(cyan('← OmniAgent')) + grey(' · 设置') + grey('（修改即保存到 .omni/config.json）'));
+      lines.push(grey('─'.repeat(Math.max(10, W - 2))));
+      items.forEach((it, i) => {
+        const sel = i === settings.sel;
+        let text;
+        if (it.t === 'addModel') text = cyan(it.label);
+        else if (it.t === 'role') {
+          const m = cfg.models[it.model];
+          const disp = m ? (m.display || m.model) : (it.model || '—');
+          const nm = '  ' + it.role;
+          const val = cyan('◀ ' + disp + ' ▶');
+          const pad = Math.max(1, W - 6 - vlen(nm) - vlen(val) - 8);
+          text = nm + ' '.repeat(pad) + grey('模型: ') + val;
+        } else if (it.t === 'num') {
+          const val = cyan('◀ ' + (cfg.pipeline?.[it.key] ?? 1) + ' ▶');
+          const pad = Math.max(1, W - 6 - vlen(it.label) - vlen(val));
+          text = '  ' + it.label + ' '.repeat(pad) + val;
+        } else text = grey('  ' + it.label);
+        const rowStr = sel ? '\x1b[48;5;236m' + cutPlain(text + ' ', W - 2) + '\x1b[0m' : cutPlain(text, W - 2);
+        lines.push(rowStr);
+        const y = lines.length + 1;
+        if (it.t !== 'info') clickZones.push({ x1: 1, y1: y, y2: y, x2: W, act: { t: 'set', i } });
+      });
+      while (lines.length < H - 2) lines.push('');
+      lines.length = H - 2;
+      lines.push(grey('─'.repeat(Math.max(0, W - 4))));
+      lines.push(grey('  ↑↓ 选择 · ↵/◀▶ 或点击 修改 · esc 返回'));
+      out('\x1b[?25h\x1b[H\x1b[2J' + lines.join('\n') + '\x1b[?25l');
+      return;
     }
 
     // 欢迎屏：全屏单栏直接输出；光标定位到输入行内（第 H-2 行，「 ❯ 」后）
@@ -761,6 +862,67 @@ async function runInteractive(baseCfg, flags, plugins) {
     // 光标定位回输入行内（main 倒数第 3 行 = inputRow，「 ❯ 」后）
     const typedO = line ? cutPlain(line, Math.max(8, MW - 8)) : '';
     out('\x1b[?25h\x1b[H\x1b[2J' + rows.join('\n') + '\n' + `\x1b[${Math.max(1, main.length - 2)};${4 + vlen(typedO)}H`);
+  }
+
+  // ---------- 选择模型界面：搜索 + 按供应商分组，↵ 选择 ----------
+  function openPicker() {
+    if (!Object.keys(cfg.models || {}).length) { push(yellow('还没有模型——先 /models add 添加')); render(); return; }
+    picker = { q: '', sel: 0 };
+    render();
+  }
+  function pickerRows() { // 展示行：{kind:'provider'|'model', ...}
+    const q = (picker.q || '').toLowerCase();
+    const flat = Object.entries(cfg.models || {}).filter(([id, m]) =>
+      !q || (id + ' ' + (m.display || '') + ' ' + (m.provider || guessProvider(m.base_url)) + ' ' + m.model).toLowerCase().includes(q));
+    const rows = [];
+    let prov = null;
+    for (const [id, m] of flat) {
+      const p = m.provider || guessProvider(m.base_url);
+      if (p !== prov) { prov = p; rows.push({ kind: 'provider', name: p }); }
+      rows.push({ kind: 'model', id, m, label: m.display || m.model });
+    }
+    return rows;
+  }
+  function pickerMove(dir) {
+    const rows = pickerRows();
+    const modelIdx = rows.map((r, i) => (r.kind === 'model' ? i : -1)).filter((i) => i >= 0);
+    if (!modelIdx.length) return;
+    let pos = modelIdx.indexOf(picker.sel);
+    pos = pos < 0 ? 0 : (pos + dir + modelIdx.length) % modelIdx.length;
+    picker.sel = modelIdx[pos];
+    render();
+  }
+  function pickerConfirm(id) {
+    chatModel = id;
+    picker = null;
+    push(green('✓ 当前对话模型：') + cyan(cfg.models[id]?.display || id) + grey('（/model 可再切换 · /hoa-loop <任务> 多模型协作）'));
+    render();
+  }
+
+  // ---------- 设置页：岗位模型映射 + hoa-loop 个性化 + 添加模型 ----------
+  function openSettings() { settings = { sel: 0 }; render(); }
+  function settingsItems() {
+    const items = [{ t: 'addModel', label: '＋ 添加模型（OpenAI 兼容向导）' }];
+    for (const [rid, rr] of Object.entries(cfg.roles || {})) items.push({ t: 'role', role: rid, model: rr.model });
+    items.push({ t: 'num', key: 'max_workers', label: 'hoa-loop 并发数（workers 同时执行）', min: 1, max: 8 });
+    items.push({ t: 'num', key: 'verify_rounds', label: 'hoa-loop 核查轮数（verifier 修复回路）', min: 1, max: 5 });
+    items.push({ t: 'info', label: '提示：/hoa-loop <任务> 才会启动多模型协作；普通输入=单模型直接对话' });
+    return items;
+  }
+  function adjustSetting(item, dir) {
+    if (item.t === 'addModel') { settings = null; startModelWizard(); render(); return; }
+    if (item.t === 'role') {
+      const ids = Object.keys(cfg.models || {});
+      if (!ids.length || !cfg.roles[item.role]) return;
+      const cur = Math.max(0, ids.indexOf(item.model));
+      cfg.roles[item.role].model = ids[(cur + (dir || 1) + ids.length) % ids.length];
+    } else if (item.t === 'num') {
+      cfg.pipeline = cfg.pipeline || {};
+      const cur = cfg.pipeline[item.key] || item.min;
+      cfg.pipeline[item.key] = Math.min(item.max, Math.max(item.min, cur + (dir || 1)));
+    } else return;
+    saveConfig(cfg); // 修改即保存
+    render();
   }
 
   // ---------- /models add 向导：批量添加 OpenAI 兼容模型（逐项问答，esc 取消） ----------
@@ -842,7 +1004,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     else if (t === '/help') {
       push(bold('会话命令：'));
       COMMANDS.forEach(([c, d]) => push('  ' + cyan(c.padEnd(11)) + grey(d)));
-    } else if (t === '/clear') { transcript.length = 0; replies.length = 0; }
+    } else if (t === '/clear') { transcript.length = 0; replies.length = 0; chatHistory.length = 0; scrollOffset = 0; }
     else if (t === '/mock') { mock = !mock; push(yellow('演示模式：' + (mock ? '开（无需密钥）' : '关'))); }
     else if (t === '/agents') { agentIdx++; chatModel = null; const nr = currentRole(); push(grey('岗位切换 → ') + cyan(nr || '（无）')); }
     else if (t === '/reload') {
@@ -886,7 +1048,8 @@ async function runInteractive(baseCfg, flags, plugins) {
       if (s2) { view = s2.key; viewOffset = 0; }
       else push(yellow('没有编号为 ' + arg + ' 的子会话（/open 查看列表）'));
       return true;
-    } else if (t.startsWith('/model ')) {
+    } else if (t === '/model' || t.startsWith('/model ')) {
+      if (t === '/model') { openPicker(); return true; }
       const id = t.slice(7).trim();
       if (cfg.models?.[id]) { chatModel = id; push(green('本次会话统一模型：' + id)); }
       else push(yellow('无此模型：' + id + '（/status 查看可用模型）'));
@@ -912,25 +1075,84 @@ async function runInteractive(baseCfg, flags, plugins) {
       replies.length = 0;
     }
     push(grey('❯ ') + bold(t));
+    // 路由：/hoa-loop = 多模型协作流水线；普通输入 = 单个模型直接对话；其它 / 命令走 execCommand
+    if (t.startsWith('/hoa-loop')) { runMultiModel(t.slice(9).trim()); return; }
     if (t.startsWith('/')) { execCommand(t); render(); return; }
+    runSingleModel(t);
+  }
+
+  // ---------- 单模型模式：一个模型直接对话（默认），不进入多模型流水线 ----------
+  function runSingleModel(task) {
+    const modelId = chatModel || Object.values(cfg.roles || {})[0]?.model;
+    const model = cfg.models?.[modelId];
+    if (!modelId || !model) { push(yellow('尚未配置任何模型——先 /models add 添加，或 /model 选择一个')); render(); return; }
+    if (!mock && (!model.api_key || model.api_key === 'YOUR_KEY_HERE')) {
+      push(yellow(`模型「${modelId}」缺少有效 API Key——去「设置」或 /models add 填写后重试`)); render(); return;
+    }
+    chatHistory.push({ role: 'user', content: task });
+    busy = true; interrupted = false; lastEscAt = 0; tokens = 0; stageCurKey = null; curStageKey = null; stagesDone.clear();
+    taskStart = Date.now(); curActivity = '与 ' + (model.display || model.model) + ' 对话'; curRoute = 'main';
+    subs.clear(); view = null; viewOffset = 0;
+    think = { startedAt: Date.now(), note: '调用 ' + model.model, route: 'main', reasonBuf: '' };
+    streamBuf = '';
+    if (busyTick) clearInterval(busyTick);
+    busyTick = setInterval(() => { if (busy) render(); }, 200);
+    render();
+    (async () => {
+      try {
+        const r = await chatCompletion(model, chatHistory.slice(-12), [], {
+          stream: !mock, mock, mockRole: modelId,
+          onToken: (tk) => { if (interrupted) throw new Error('__INTERRUPT__'); streamBuf += tk; tokens += Math.max(1, Math.round(tk.length / 3)); },
+          onReason: (tk) => { if (interrupted) throw new Error('__INTERRUPT__'); if (think) think.reasonBuf += tk; },
+        });
+        flushStreamMain();
+        think = null;
+        const answer = (r.content || streamBuf || '').trim();
+        if (answer) {
+          chatHistory.push({ role: 'assistant', content: answer });
+          // 最终输出：品红色块单独呈现，保持简洁
+          push('\n' + bold(magenta('━━ 最终输出 ━━')));
+          vwrap(answer.replace(/\n{3,}/g, '\n\n'), Math.max(20, Math.floor((process.stdout.columns || 100) * 0.68) - 4)).slice(0, 14).forEach((l) => push('  ' + magenta(l)));
+          push('');
+        }
+      } catch (e) {
+        if (String(e?.message).includes('__INTERRUPT__')) push(yellow('⏹ 已中断（esc interrupt）'));
+        else push('\n' + red(String(e?.message || e)) + '\n');
+      }
+      const wasInt = interrupted;
+      busy = false; interrupted = false; streamBuf = ''; think = null;
+      if (busyTick) { clearInterval(busyTick); busyTick = null; }
+      render();
+      if (!wasInt && pendingQueue.length) { const nx = pendingQueue.shift(); submit(nx); } // 模型工作时排队的指令，自动续跑
+    })();
+  }
+
+  // ---------- 多模型协作流水线（仅 /hoa-loop 触发，且需已安装 skill/插件） ----------
+  function runMultiModel(task) {
+    if (!task) { push(yellow('用法：/hoa-loop <任务>') + grey('（仅安装 skill 后可用多模型协作；普通输入=单模型对话）')); render(); return; }
+    if (!mock && pluginNames.length === 0) {
+      push(yellow('多模型协作需要先在「设置」或 /plugins 安装一个 skill（插件）。')
+        + grey('  普通输入（不带 /hoa-loop）会直接用单个模型对话。'));
+      render(); return;
+    }
     const bad = mock ? [] : missingKeys();
     if (bad.length) { push(yellow('以下模型缺少有效密钥：' + bad.join(', ')) + grey('（输入 /mock 体验演示，或去配置页填 key）')); render(); return; }
     let runCfg = cfg;
     if (chatModel) { runCfg = structuredClone(cfg); for (const rr of Object.values(runCfg.roles)) rr.model = chatModel; }
     busy = true; interrupted = false; lastEscAt = 0; tokens = 0; stageCurKey = null; curStageKey = null; stagesDone.clear();
     taskStart = Date.now(); curActivity = ''; mainReasonBuf = ''; curRoute = 'main';
+    chatHistory = []; // 进入多模型协作，清空单模型对话历史
     subs.clear(); view = null; viewOffset = 0; // 新任务：重建子会话
-    // 忙碌期间定时重绘：让转轮/秒数/推理文本持续刷新
     if (busyTick) clearInterval(busyTick);
     busyTick = setInterval(() => { if (busy) render(); }, 200);
     render();
     (async () => {
       try {
-        const report = await runPipeline(t, runCfg, plugins, { cwd: process.cwd() }, mock, tuiTrace());
+        const report = await runPipeline(task, runCfg, plugins, { cwd: process.cwd() }, mock, tuiTrace());
         ensureDirs();
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
         const rp = path.join(RUNS_DIR, `run-${stamp}.md`);
-        fs.writeFileSync(rp, renderReport(t, report, mock), 'utf8');
+        fs.writeFileSync(rp, renderReport(task, report, mock), 'utf8');
         push('\n' + dim('运行报告已保存：' + rp));
         // 最终输出：品红色块单独呈现（区别于过程信息，保持简洁）
         push('\n' + bold(magenta('━━ 最终输出 ━━')));
@@ -945,7 +1167,6 @@ async function runInteractive(baseCfg, flags, plugins) {
       busy = false; interrupted = false; streamBuf = ''; think = null;
       if (busyTick) { clearInterval(busyTick); busyTick = null; }
       render();
-      // 模型工作时用户输入的指令，按序自动继续执行
       if (!wasInt && pendingQueue.length) { const nx = pendingQueue.shift(); submit(nx); }
     })();
   }
@@ -997,14 +1218,28 @@ async function runInteractive(baseCfg, flags, plugins) {
       if (mw) { push(yellow('✕ 已取消添加模型')); mw = null; render(); return; }
       if (popupOpen) { popupOpen = false; render(); } else if (line) { line = ''; render(); } return;
     }
-    if (key.name === 'up') { if (popupOpen) { const n = popupEntries()?.length || 1; popupSel = (popupSel - 1 + n) % n; render(); } return; }
-    if (key.name === 'down') { if (popupOpen) { const n = popupEntries()?.length || 1; popupSel = (popupSel + 1) % n; render(); } return; }
+    if (key.name === 'up') {
+      if (popupOpen) { const n = popupEntries()?.length || 1; popupSel = (popupSel - 1 + n) % n; render(); return; }
+      if (started && !picker && !settings && !view) { scrollOffset += 3; render(); return; }
+      return;
+    }
+    if (key.name === 'down') {
+      if (popupOpen) { const n = popupEntries()?.length || 1; popupSel = (popupSel + 1) % n; render(); return; }
+      if (started && !picker && !settings && !view) { scrollOffset = Math.max(0, scrollOffset - 3); render(); return; }
+      return;
+    }
     if (key.name === 'tab') {
       if (popupOpen) { const e = popupEntries(); if (e?.[popupSel]) { line = e[popupSel][0] + ' '; popupOpen = false; render(); } return; }
       agentIdx++; chatModel = null; const nr = currentRole(); if (nr) push(grey('岗位切换 → ') + cyan(nr)); render(); return;
     }
     if (key.name === 'return' || key.name === 'enter') {
-      if (popupOpen) { const e = popupEntries(); if (e?.[popupSel]) { line = e[popupSel][0] + ' '; popupOpen = false; render(); return; } }
+      if (popupOpen) {
+        // 若已输入完整命令（首 token 即已知命令），直接提交该行，而非接受补全建议
+        const firstTok = line.trim().split(/\s+/)[0];
+        const known = COMMANDS.some(([c]) => c === firstTok || c.split(' ')[0] === firstTok);
+        if (known) { popupOpen = false; submit(line); return; }
+        const e = popupEntries(); if (e?.[popupSel]) { line = e[popupSel][0] + ' '; popupOpen = false; render(); return; }
+      }
       submit(line);
       return;
     }
@@ -1032,7 +1267,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     while (kb.length) {
       let m;
       // SGR 鼠标（ kitty/xterm ）: ESC [ < b ; col ; row M/m
-      if ((m = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(kb))) { kb = kb.slice(m[0].length); onMouse(+m[2], +m[3], m[4] === 'M'); continue; }
+      if ((m = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(kb))) { kb = kb.slice(m[0].length); onMouse(+m[2], +m[3], m[4] === 'M', +m[1]); continue; }
       if (kb.startsWith('\x1b[M')) { kb = kb.slice(6); continue; } // 传统 X10 鼠标：忽略
       if ((m = /^\x1b\[([ABCD])/.exec(kb))) { kb = kb.slice(m[0].length); onKey('', { name: { A: 'up', B: 'down', C: 'right', D: 'left' }[m[1]] }); continue; }
       if ((m = /^\x1b\[\d*~/.exec(kb))) { kb = kb.slice(m[0].length); continue; }
@@ -1060,17 +1295,27 @@ async function runInteractive(baseCfg, flags, plugins) {
       onKey(ch, { name: ch });
     }
   }
-  function onMouse(col, row, press) {
+  function onMouse(col, row, press, btn) {
     if (!press) return;
-    for (const z of clickZones) {
-      if (row >= z.y1 && row <= z.y2 && col >= z.x1 && col <= z.x2) {
-        if (z.act.t === 'cmd') submit(z.act.cmd); // 点命令弹层 → 直接执行
-        else if (z.act.t === 'sub') { view = z.act.key; viewOffset = 0; render(); } // 点子会话 → 详情页
-        else if (z.act.t === 'settings') { if (!mw && !clar) startModelWizard(); render(); } // 右下角设置 → 添加模型
-        else if (z.act.t === 'back') { view = null; viewOffset = 0; render(); }
-        return;
-      }
+    // 滚轮：主会话里翻看历史记录（64=上滚 65=下滚）
+    if (btn === 64 || btn === 65) {
+      if (view || settings || picker) return;
+      scrollOffset += btn === 64 ? 4 : -4;
+      scrollOffset = Math.max(0, scrollOffset);
+      render();
+      return;
     }
+    for (const z of clickZones) {
+      if (row >= z.y1 && row <= z.y2 && col >= z.x1 && col <= z.x2) { handleZone(z); return; }
+    }
+  }
+  function handleZone(z) {
+    if (z.act.t === 'cmd') { scrollOffset = 0; submit(z.act.cmd); } // 点命令弹层 → 直接执行
+    else if (z.act.t === 'sub') { view = z.act.key; viewOffset = 0; render(); } // 点子会话 → 详情页
+    else if (z.act.t === 'settings') { openSettings(); } // 右下角设置 → 设置页
+    else if (z.act.t === 'back') { view = null; viewOffset = 0; render(); }
+    else if (z.act.t === 'pick') { pickerConfirm(z.act.id); } // 点模型行 → 选用
+    else if (z.act.t === 'set') { settings.sel = z.act.i; adjustSetting(settingsItems()[z.act.i], 1); } // 点设置行 → 修改
   }
 
   let altOn = false; // 是否已进入独立窗口（alternate screen buffer）
@@ -1114,7 +1359,7 @@ async function runInteractive(baseCfg, flags, plugins) {
   if (process.env.OMNI_TEST) {
     globalThis.__OMNI_TEST = {
       getState: () => ({
-        busy, clar: !!clar, mw: !!mw, view,
+        busy, clar: !!clar, mw: !!mw, view, settings: !!settings,
         transcript: transcript.map(String),
         subs: [...subs.values()].map((x) => ({ idx: x.idx, key: x.key, title: x.title, status: x.status, lines: x.lines.map(String) })),
       }),

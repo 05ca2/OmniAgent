@@ -1,5 +1,5 @@
 // 无头综合测试（基于 __OMNI_TEST 状态断言）：
-// 子会话分流 / 澄清问卷 / 详情页 / 鼠标点击（子会话+设置+命令弹层）/ 最终输出配色
+// 单模型默认模式 / /hoa-loop 多模型协作 / 子会话分流 / 澄清问卷 / 详情页 / 鼠标点击 / 最终输出配色
 const chunks = [];
 const realWrite = process.stdout.write.bind(process.stdout);
 process.stdout.write = (s) => { chunks.push(String(s)); return true; };
@@ -47,15 +47,26 @@ try {
   await sleep(300);
   if (!dataHandler || !globalThis.__OMNI_TEST) { realWrite('[FAIL] 初始化失败\n'); process.exit(1); }
 
-  // ===== 1) 澄清问卷（mock [clarify] 任务）=====
-  type('做一个多人在线贪吃蛇 [clarify]'); enter();
-  await sleep(120);
+  // ===== 0) 单模型默认模式：普通输入不应进入多模型流水线 =====
+  type('用一句话介绍你自己'); enter();
+  await sleep(300);
   let st = state();
+  if (st.subs.length === 0) ok('普通输入 = 单模型（无子会话）'); else fail('普通输入误建子会话');
+  if (st.transcript.some((l) => l.includes('━━ 最终输出 ━━')) && st.transcript.some((l) => l.includes('已处理该步骤'))) ok('单模型最终输出块已渲染'); else fail('单模型输出缺失');
+  if (!st.transcript.some((l) => l.includes('开启子会话'))) ok('单模型不产生流水线事件'); else fail('单模型产生了流水线事件');
+
+  type('/clear'); enter(); // 隔离：清空单模型对话记录，避免干扰多模型断言
+  await sleep(120);
+
+  // ===== 1) /hoa-loop 多模型协作 + 澄清问卷（mock [clarify] 任务）=====
+  type('/hoa-loop 做一个多人在线贪吃蛇 [clarify]'); enter();
+  await sleep(140);
+  st = state();
   if (st.clar && st.transcript.some((l) => l.includes('需要澄清') && l.includes('2 个问题'))) ok('澄清问卷弹出（逐题）'); else fail('澄清问卷未弹出');
   type('Web 浏览器'); enter();
   await sleep(60);
   type('51/51 测试通过'); enter();
-  await sleep(300);
+  await sleep(320);
   st = state();
   const ans1 = st.transcript.some((l) => l.includes('→ Web 浏览器'));
   const ans2 = st.transcript.some((l) => l.includes('→ 51/51 测试通过'));
@@ -71,7 +82,7 @@ try {
   }
   const subsDump = st.subs.map((s) => s.title + '\n' + s.lines.join('\n')).join('\n');
   const finIdx = st.transcript.findIndex((l) => l.includes('最终输出'));
-  const preFinal = st.transcript.slice(0, finIdx).join('\n'); // 最终输出块之前的主会话
+  const preFinal = st.transcript.slice(0, finIdx).join('\n');
   if (subsDump.includes('已处理该步骤') && !preFinal.includes('已处理该步骤')) ok('工作过程只在子会话，主会话干净'); else fail('工作过程分流失败');
   if (titles.includes('规划 · Planner') && st.subs.find((s) => s.title === '规划 · Planner').lines.some((l) => l.includes('调研：'))) ok('规划过程在子会话内'); else fail('规划子会话内容缺失');
   if (all.includes('━━ 最终输出 ━━') && all.includes('核查：✅ 通过')) ok('最终输出块已渲染（含核查结论）'); else fail('缺最终输出块');
@@ -100,11 +111,16 @@ try {
   await sleep(150);
   if (!state().view) ok('esc 退出详情页'); else fail('esc 未退出详情页');
 
-  // ===== 5) 右下角设置点击 → 添加模型向导 =====
+  // ===== 5) 右下角设置点击 → 设置页 → 添加模型向导 =====
   mouse(105, 39);
   await sleep(80);
   st = state();
-  if (st.mw) ok('右下角设置点击打开添加模型向导'); else fail('设置入口点击无效');
+  if (st.settings) ok('右下角设置点击打开设置页'); else fail('设置入口点击无效');
+  const addZ = st.zones.filter((z) => z.t === 'set').sort((a, b) => a.y1 - b.y1)[0];
+  mouse(2, addZ ? addZ.y1 : 3); // 设置页首行 = ＋ 添加模型
+  await sleep(80);
+  st = state();
+  if (st.mw) ok('设置页点击「添加模型」打开向导'); else fail('添加模型入口无效');
   escKey();
   await sleep(120);
   if (!state().mw) ok('esc 取消向导'); else fail('向导未取消');
