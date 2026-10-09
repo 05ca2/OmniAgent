@@ -585,40 +585,6 @@ async function runInteractive(baseCfg, flags, plugins) {
     return cutPlain(s, MW);
   }
 
-  // Codex 极简欢迎屏：左上标题 + 居中暗色标志 + 底部输入行 + 状态行
-  function welcomeLines(W, H) {
-    const magenta = (s) => (IS_TTY ? '\x1b[35m' + s + '\x1b[0m' : String(s));
-    const head = [
-      bold('>⌒ OmniAgent') + grey(' (v' + VERSION + ')'),
-      grey('  ' + process.cwd()),
-      grey('  permissions: ') + magenta('YOLO mode'),
-    ];
-    const role = currentRole();
-    const r0 = role ? cfg.roles[role] : null;
-    const m0 = r0 ? cfg.models[r0.model] : null;
-    const modelId = chatModel ? (cfg.models[chatModel]?.model || chatModel) : (m0 ? m0.model : '未配置 · 先运行 omniagent init');
-    const typed = line ? cutPlain(line, Math.max(10, W - 8)) : '';
-    const padN = Math.max(0, (W - 2) - 4 - vlen(typed) - (typed ? 0 : INPUT_PH.length));
-    const bottom = [
-      barBg(' ❯ ' + (typed || fgDim(INPUT_PH)) + ' '.repeat(padN)),
-      (mock ? yellow('mock') : cyan(modelId)) + grey(' · ' + process.cwd()),
-      grey('tab for agents · ? for shortcuts'),
-    ];
-    const m = [];
-    m.push(...head);
-    const mid = H - head.length - bottom.length - 1;
-    const padTop = Math.max(1, Math.floor((mid - LOGO_LINES.length) / 2));
-    for (let i = 0; i < padTop; i++) m.push('');
-    for (const l of LOGO_LINES) {
-      const p = Math.max(0, Math.floor((W - vlen(l)) / 2));
-      m.push(' '.repeat(p) + dim(l));
-    }
-    while (m.length < H - bottom.length - 1) m.push('');
-    m.push('');
-    m.push(...bottom);
-    return m.slice(0, H);
-  }
-
   function render() {
     clickZones.length = 0; // 每帧重建鼠标热区
     const W = process.stdout.columns || 100;
@@ -627,10 +593,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     const RW = Math.max(10, W - MW - 3);
 
     let main, right;
-    if (!started) {
-      main = welcomeLines(W, H);
-      right = [];
-    } else {
+    {
     // ---- 主区 ----
     const brand = brandLine(MW);
     const pop = popupEntries();
@@ -686,6 +649,12 @@ async function runInteractive(baseCfg, flags, plugins) {
 
     // 把全部会话记录折叠成显示行，再按 scrollOffset 取尾部窗口（滚轮/↑↓ 翻历史）
     const allLines = [];
+    if (!started) {
+      // 欢迎信息也纳入分栏布局（品牌大字下方显示）
+      allLines.push(grey('  ' + process.cwd()));
+      allLines.push(grey('  permissions: ') + magenta('YOLO mode'));
+      allLines.push('');
+    }
     for (const t of transcript) {
       if (t === '\n') { allLines.push(''); continue; }
       for (const l of vwrap(t.replace(/\n/g, ''), MW)) allLines.push(l);
@@ -831,13 +800,6 @@ async function runInteractive(baseCfg, flags, plugins) {
       lines.push(grey('─'.repeat(Math.max(0, W - 4))));
       lines.push(grey('  ↑↓ 选择 · ↵/◀▶ 或点击 修改 · esc 返回'));
       out('\x1b[?25h\x1b[H\x1b[2J' + lines.join('\n') + '\x1b[?25l');
-      return;
-    }
-
-    // 欢迎屏：全屏单栏直接输出；光标定位到输入行内（第 H-2 行，「 ❯ 」后）
-    if (!started) {
-      const typedW = line ? cutPlain(line, Math.max(10, W - 8)) : '';
-      out('\x1b[?25h\x1b[H\x1b[2J' + main.join('\n') + '\n' + `\x1b[${H - 2};${4 + vlen(typedW)}H`);
       return;
     }
 
