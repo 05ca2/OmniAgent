@@ -1362,6 +1362,7 @@ async function runInteractive(baseCfg, flags, plugins) {
         busy, clar: !!clar, mw: !!mw, view, settings: !!settings,
         transcript: transcript.map(String),
         subs: [...subs.values()].map((x) => ({ idx: x.idx, key: x.key, title: x.title, status: x.status, lines: x.lines.map(String) })),
+        zones: clickZones.map((z) => ({ t: z.act && z.act.t, y1: z.y1, y2: z.y2, x1: z.x1, x2: z.x2, act: z.act })),
       }),
     };
   }
