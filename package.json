@@ -4,6 +4,7 @@
   "description": "多模型协作智能体开发工具：自带模型接入、可下载插件、多岗位编排（指挥->规划->执行->检验）",
   "type": "module",
   "bin": {
+    "omniagent": "bin/omni.js",
     "omni": "bin/omni.js"
   },
   "engines": {

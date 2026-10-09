@@ -7,60 +7,120 @@
 指挥 Director → 规划 Planner → 多岗位 Workers（并行）→ 检验 Verifier（不通过则补做）
 ```
 
+- **终端优先**：OpenCode 风格 TUI —— 居中大标志欢迎屏，输入指令后切换为「左栏对话 / 右栏回复」双栏布局，标志作背景水印。
 - **本地 Web 应用**：`serve` 后在浏览器打开 `http://localhost:3000`，可视化看每个岗位的思考与工具调用。
 - **官方官网**：`site` 启动 `http://localhost:8080`，含插件中心与反馈。
-- 纯 Node.js（零第三方依赖），不会卡在 `npm install`。
+- 纯 Node.js（**零第三方依赖**），不会卡在 `npm install`。
 
-## 快速开始（本地 Web 应用）
+## 📦 下载安装（一分钟上手）
 
-```bash
-node bin/omni.js init                 # 生成 .omni/config.json（预设 full）
-node bin/omni.js serve                # 启动本地服务
-# 浏览器打开 http://localhost:3000 → 在「配置」页填模型密钥 → 在「运行」页跑任务
-```
-
-无密钥先体验全流程（内置 mock 模型）：打开网页勾选「演示模式」再运行，或直接：
+### 1. 下载
 
 ```bash
-node bin/omni.js run "调研 RAG 主流方案" --mock
+git clone https://github.com/05ca2/OmniAgent.git
+cd OmniAgent
 ```
 
-## 在终端 / PowerShell 中直接使用（推荐）
+> 不用 git 的话，在 GitHub 页面点 **Code → Download ZIP** 解压即可。
 
-不依赖浏览器，直接在终端里跑。**opencode 风格 TUI**：像素 logo、边框输入框、岗位状态行：
+### 2. 安装 `omniagent` 全局命令
 
 ```bash
-node bin/omni.js init
-node bin/omni.js                      # 终端里直接敲这行 → 进入交互界面（需先 init）
-# 或显式：
-node bin/omni.js chat                 # 同上
+npm install -g .
 ```
 
-界面下方常驻「岗位 · 模型」状态行与 Tip 提示。快捷键与命令：
+零依赖、无编译、秒装。完成后你的终端里就有了 `omniagent` 命令（Windows 的 PowerShell / CMD 同样适用）。
+
+> 不想装全局命令？也可以始终用 `node bin/omni.js` 代替 `omniagent`，效果完全一样。
+
+### 3. 初始化配置
+
+```bash
+omniagent init
+```
+
+会在当前目录生成 `.omni/config.json`（含预设岗位）。编辑它，填入你的模型 `api_key`：
+
+```json
+"models": {
+  "main": { "base_url": "https://api.openai.com/v1", "api_key": "sk-...", "model": "gpt-4o" }
+}
+```
+
+### 4. 开始使用
+
+```bash
+omniagent
+```
+
+直接回车进入交互界面 🎉
+
+**还没有 API 密钥？** 先体验全流程：进入界面后输入 `/mock` 切换演示模式（无需任何密钥），
+或者单次执行 `omniagent run "调研 RAG 主流方案" --mock`。
+
+### 升级
+
+```bash
+cd OmniAgent
+git pull
+npm install -g .
+```
+
+## 🖥️ 界面导览
+
+**启动画面**（输入指令前）：居中大标志 + 带边框输入框 + 当前岗位/模型状态行 + 快捷键提示：
+
+```
+                    ██ OmniAgent 标志 ██
+
+            ┌──────────────────────────────────────┐
+            │ Ask anything…  "输入任务，回车开始"      │
+            │ 岗位名称  ·  模型 ID                    │
+            └──────────────────────────────────────┘
+                        tab agents   ctrl+p commands
+
+                  ● Tip 运行 /help 查看全部命令
+
+```
+
+**输入指令后**：自动切换为双栏布局 —— **左栏**是对话（你的指令 / 流水线阶段 / 工具调用），
+**右栏**实时显示模型回复，OmniAgent 标志以暗色水印作背景。
+
+## ⌨️ 快捷键与命令
 
 | 操作 | 作用 |
 | --- | --- |
 | （直接输入文字 + Enter） | 作为任务跑一次编排 |
 | `tab` | 切换岗位（输入框下方状态行实时更新） |
 | `ctrl+p` | 展开 / 收起命令面板 |
+| `esc` | 中断当前运行 / 清空输入 |
 | `ctrl+c` | 退出 |
 | `/mock` | 切换演示模式（无需密钥） |
 | `/model <id>` | 切换本次会话统一使用的模型，如 `/model main` |
 | `/status` | 查看模型 / 岗位 / 插件状态 |
 | `/reload` | 重新加载 `.omni/config.json`（改了配置不用重启） |
+| `/clear` | 清空对话 |
 
-单次执行（不进交互）：`node bin/omni.js run "你的任务"`（可加 `--mock` / `--preset`）。
+单次执行（不进交互）：`omniagent run "你的任务"`（可加 `--mock` / `--preset`）。
 管道或非 TTY 下输出自动去色，方便重定向到文件。
+
+## 本地 Web 应用
+
+```bash
+omniagent init
+omniagent serve        # 浏览器打开 http://localhost:3000
+```
+
+在「配置」页可视化填模型密钥 → 在「运行」页跑任务，实时看每个岗位的思考与工具调用。
 
 ## 官方官网（插件中心 + 反馈）
 
 ```bash
-node bin/omni.js site                 # 启动官网 http://localhost:8080
+omniagent site         # 启动官网 http://localhost:8080
 ```
 
 - **插件中心**：列出可下载插件，点「下载 .js」或复制 `plugin add` 命令安装。
 - **反馈**：底部表单提交后落地到 `site/feedback.json`。
-- 本地应用的「插件中心」默认从 `http://localhost:8080/plugins.json` 拉取市场列表，可一键安装。
 
 ## 模型接入（OpenAI 兼容）
 
@@ -84,7 +144,7 @@ vLLM、通义千问、智谱、月之暗面 等。
 ## 插件（可下载的能力）
 
 内置：`file`（读写搜索）、`shell`（执行命令）、`web`（联网抓取/搜索）。
-下载第三方插件：在网页「插件中心」一键安装，或 `node bin/omni.js plugin add <url>`
+下载第三方插件：在网页「插件中心」一键安装，或 `omniagent plugin add <url>`
 （存到 `.omni/plugins`，下次自动加载）。
 示例插件见 `site/plugins/`：`translator`、`calculator`、`clock`。
 ⚠️ 第三方插件会获得 shell/文件执行权限，只装可信来源。
@@ -94,7 +154,7 @@ vLLM、通义千问、智谱、月之暗面 等。
 | 命令 | 作用 |
 | --- | --- |
 | `init [--preset name]` | 初始化配置 |
-| `chat [--mock] [--preset name]` | 终端交互模式（类 claude code，反复对话） |
+| `chat [--mock] [--preset name]` | 终端交互模式（反复对话） |
 | （无参数，且为终端） | 同 `chat`，直接进入交互模式 |
 | `run "<任务>" [--mock] [--preset name]` | 单次跑编排流水线（终端） |
 | `serve [--port 3000]` | 启动本地 Web 应用 |
