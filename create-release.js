@@ -45,7 +45,7 @@ function getChangelogBody() {
  */
 async function createRelease() {
   const headers = {
-    'Authorization': `token GITHUB_TOKEN_REDACTED`,
+    'Authorization': `token ${process.env.GITHUB_TOKEN || ''}`,
     'Accept': 'application/vnd.github.v3+json',
     'User-Agent': 'OmniAgent-Release-Script',
   };
