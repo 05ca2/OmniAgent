@@ -96,6 +96,10 @@ const GLYPHS = {
   E: ['#####', '#....', '####.', '#....', '#####'],
   T: ['#####', '..#..', '..#..', '..#..', '..#..'],
 };
+// ---------- 品牌标志（tools/logo2ascii.js 从用户 PNG 生成，Codex 风格暗色背景） ----------
+const LOGO_ART = "\n\n\n\n                          ⣀⡀\n                        ⢀⣾⠟⢿⣆\n                       ⢀⣾⠏ ⠈⢿⡄\n             ⢀⣀⣀⣀     ⢀⣾⠏   ⠘⣿⡄\n          ⣠⣶⠿⠛⠛⠛⠛⠻⢷⣦⡀⢀⣾⠏     ⠘⣿⡀\n        ⢠⣾⠏        ⠈⢿⣾⠋       ⠹⣷⡀\n        ⣿⠇           ⣿⡆  ⢀⣀⣀⣀⣀⣰⣿⣿⡆\n        ⣿⡄           ⣿⣇⣴⠿⠛⠋⠉⠉⠉⠉⠙⢿⣆\n        ⠹⣷⡀         ⣰⡿⠟⠁        ⠈⢿⣆\n         ⠘⠿⣦⣄⣀  ⢀⣀⣤⡾⠛            ⠈⣿⡄\n           ⠈⠉⠛⠛⠛⠛⠋⠉               ⠘⠛\n\n\n\n\n                                    ⠈⠐⠂⠃⠈⠃⠂";
+const LOGO_LINES = LOGO_ART.split('\n');
+
 function pixelLogo(word) {
   const rows = ['', '', '', '', ''];
   word.split('').forEach((ch, i) => {
@@ -358,11 +362,25 @@ async function runInteractive(baseCfg, flags, plugins) {
     return true;
   }
 
+  let started = false;
+
   function submit(raw) {
     const t = raw.trim();
     line = '';
     popupOpen = false;
     if (!t) { render(); return; }
+    if (!started) {
+      started = true;
+      transcript.length = 0; // 首次输入：清屏并切换布局
+      push(bold('> OmniAgent') + grey('  (v' + VERSION + ')'));
+      push('  ' + grey(process.cwd()));
+      push('  ' + grey('permissions: ') + yellow('YOLO mode'));
+      const rows = process.stdout.rows || 30;
+      const pad = Math.max(1, Math.floor((rows - LOGO_LINES.length - 8) / 2));
+      for (let i = 0; i < pad; i++) push('');
+      for (const l of LOGO_LINES) push(grey(l));
+      for (let i = 0; i < pad; i++) push('');
+    }
     push(grey('❯ ') + bold(t));
     if (t.startsWith('/')) { execCommand(t); render(); return; }
     const bad = mock ? [] : missingKeys();
@@ -435,7 +453,7 @@ async function runInteractive(baseCfg, flags, plugins) {
   }
 
   // 启动画面
-  out('\x1b[2J\x1b[H\n' + pixelLogo('OMNIAGENT') + '\n');
+  out('\x1b[2J\x1b[H\n' + LOGO_LINES.map((l) => grey(l)).join('\n') + '\n');
   push(dim('欢迎使用 OmniAgent 终端模式 —— 直接输入任务，或输入 / 查看命令。tab 切换岗位，ctrl+p 命令面板。'));
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
