@@ -33,6 +33,8 @@ export async function runAgent(role, userContent, env, opts = {}) {
       mock,
       mockRole: role.id,
       onToken: streamTokens ? (t) => T.token?.(t) : undefined,
+      // 推理进度始终透传（即便 token 流被屏蔽的结构化阶段），供界面实时展示思考进度
+      onReason: (t) => T.reason?.(t),
     });
     if (!mock) T.end?.();
 

@@ -30,9 +30,11 @@ export async function chatCompletion(model, messages, tools = [], opts = {}) {
   if (!opts.stream) {
     const data = await res.json();
     const msg = data.choices?.[0]?.message || {};
+    const rc = msg.reasoning_content || msg.reasoning;
+    if (rc && opts.onReason) opts.onReason(rc);
     return { content: msg.content || '', tool_calls: normalizeToolCalls(msg.tool_calls) };
   }
-  return consumeStream(res, opts.onToken);
+  return consumeStream(res, opts.onToken, opts);
 }
 
 function normalizeToolCalls(tcs) {
@@ -44,7 +46,7 @@ function normalizeToolCalls(tcs) {
   }));
 }
 
-async function consumeStream(res, onToken) {
+async function consumeStream(res, onToken, opts = {}) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -64,6 +66,9 @@ async function consumeStream(res, onToken) {
       let json;
       try { json = JSON.parse(payload); } catch { continue; }
       const delta = json.choices?.[0]?.delta || {};
+      // 推理内容流（DeepSeek R1 / OpenRouter 等推理模型通过 reasoning_content / reasoning 下发）
+      const rc = delta.reasoning_content || delta.reasoning;
+      if (rc && opts.onReason) opts.onReason(rc);
       if (delta.content) {
         content += delta.content;
         if (onToken) onToken(delta.content);

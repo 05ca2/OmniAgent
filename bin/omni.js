@@ -3,6 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { OMNI_DIR, PLUGIN_DIR, CONFIG_PATH, RUNS_DIR, configExists, loadConfig, saveConfig, ensureDirs } from '../src/config.js';
 import { PRESETS, buildConfigFromPreset, listPresets } from '../src/presets.js';
 import { loadPlugins } from '../src/plugins/index.js';
@@ -23,9 +25,11 @@ OmniAgent —— 多模型协作智能体开发工具
   run "<任务>" [--mock] [--preset <name>]
                                运行一次多模型编排流水线（指挥→规划→执行→检验）
   chat [--mock] [--preset <name>]
-                               进入 opencode 风格双栏终端界面（左对话流+右信息侧栏），
-                               输入 / 弹出命令补全；tab 切换岗位 · ctrl+p 命令面板 · esc 中断
-                               会话命令：/agents /mock /model /plugins /reload /status /clear /help /exit
+                               进入 opencode 风格双栏终端界面（左对话流+右工作树），
+                               实时展示模型思考/推理进度；模型工作时仍可继续输入（自动排队），
+                               连按两次 esc 中断当前任务；输入 / 弹出命令补全
+                               会话命令：/agents /models /mock /model /plugins /reload /status /clear /help /exit
+  window                       在独立的终端窗口中打开 OmniAgent 界面
   serve [--port 3000]          启动本地 Web 服务，浏览器打开 http://localhost:3000 使用
   site [--port 8080]           启动官方官网（含插件中心 / 反馈），默认 http://localhost:8080
   config                       查看当前配置（密钥脱敏）
@@ -36,7 +40,8 @@ OmniAgent —— 多模型协作智能体开发工具
   preset apply <name>          套用某预设的岗位与流水线（保留你的 models）
   help                         显示本帮助
 
-提示：直接运行不带参数的  omniagent  即可进入交互界面。
+提示：直接运行  omniagent  会在独立窗口打开交互界面；omniagent chat 在当前终端内打开。
+会话内 /models 查看模型（供应商/显示名），/models add 可批量添加 OpenAI 兼容模型。
 
 示例：
   node bin/omni.js init
@@ -151,6 +156,8 @@ const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL('../pac
 // ---------- 会话命令表（输入 / 时弹出补全，仿 opencode） ----------
 const COMMANDS = [
   ['/agents',  'Switch agent · 切换岗位'],
+  ['/models',  'List models · 模型列表（供应商/显示名）'],
+  ['/models add', 'Add models · 批量添加 OpenAI 兼容模型'],
   ['/mock',    'Toggle mock mode · 演示模式（无需密钥）'],
   ['/model',   'Use one model for all roles · 统一模型'],
   ['/plugins', 'List installed plugins · 插件列表'],
@@ -198,6 +205,23 @@ const vwrap = (s, w) => { // 纯文本按显示宽度折叠成多行
   return lines.length ? lines : [''];
 };
 
+// 从 base_url 反推供应商显示名（仅在配置里没写 provider 时兜底）
+function guessProvider(url) {
+  const u = String(url || '').toLowerCase();
+  if (u.includes('openrouter')) return 'OpenRouter';
+  if (u.includes('deepseek')) return 'DeepSeek';
+  if (u.includes('api.openai.com')) return 'OpenAI';
+  if (u.includes('dashscope') || u.includes('aliyun')) return '通义千问';
+  if (u.includes('bigmodel') || u.includes('zhipu')) return '智谱 GLM';
+  if (u.includes('moonshot') || u.includes('kimi')) return '月之暗面';
+  if (u.includes('anthropic')) return 'Anthropic';
+  if (u.includes('siliconflow')) return '硅基流动';
+  if (u.includes('localhost') || u.includes('127.0.0.1') || u.includes(':1234') || u.includes(':11434')) return '本地（LM Studio / Ollama）';
+  if (u.includes('groq')) return 'Groq';
+  if (u.includes('together')) return 'Together';
+  return '自定义（OpenAI 兼容）';
+}
+
 // 终端交互模式（opencode 风格双栏 TUI）：左=对话流+输入框，右=会话信息侧栏
 async function runInteractive(baseCfg, flags, plugins) {
   if (!IS_TTY) return legacyLoop(baseCfg, flags, plugins); // 管道/重定向：走简单逐行模式
@@ -212,6 +236,11 @@ async function runInteractive(baseCfg, flags, plugins) {
   let tokens = 0;
   let interrupted = false;
   let streamBuf = ''; // 正在流式输出的模型文本
+  let think = null; // 实时思考进度：{ startedAt, note, reasonBuf }
+  let lastEscAt = 0; // 双击 esc 中断检测
+  let busyTick = null; // 忙碌期间的定时重绘（刷新思考秒数/工作树进度）
+  const pendingQueue = []; // 模型工作时用户继续输入的排队消息
+  let mw = null; // 添加模型向导状态（null=未激活）
   const transcript = []; // 主区对话行（已带 ANSI）
   const sessionStart = new Date();
   const pluginNames = plugins.map((p) => ({ name: p.name, n: (p.tools || []).length }));
@@ -240,6 +269,13 @@ async function runInteractive(baseCfg, flags, plugins) {
     if (key) { stageCurKey = key; stagesDone.add(key); }
   }
   function pushReply(t) { replies.push(t); }
+  // 结束一段思考：把耗时以 "✽ Thought: 9.0s" 形式落进对话流
+  function endThink() {
+    if (!think) return;
+    const secs = ((Date.now() - think.startedAt) / 1000).toFixed(1);
+    push(dim(`  ✽ Thought: ${secs}s`));
+    think = null;
+  }
   function flushStream() {
     if (!streamBuf) return;
     vwrap(streamBuf.trimEnd(), 200).forEach((l) => { push('  ' + l); pushReply('  ' + l); });
@@ -248,15 +284,17 @@ async function runInteractive(baseCfg, flags, plugins) {
 
   // 流水线 trace：把事件写进对话区（而非 ui 直写终端）
   const tuiTrace = () => ({
-    stage: (n, s) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); markStage(n); push('\n' + bold(cyan('◆ ' + n)) + (s ? grey('  ' + s) : '') + '\n'); },
-    step: (role, ins) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); const s0 = String(ins).replace(/\s+/g, ' ').trim(); const s = s0.length > 40 ? s0.slice(0, 40) + '…' : s0; push(grey('└─ ') + bold(role) + grey(' · ' + s)); },
-    think: (role, note) => { if (interrupted) throw new Error('__INTERRUPT__'); },
-    token: (t) => { if (interrupted) throw new Error('__INTERRUPT__'); streamBuf += t; tokens += Math.max(1, Math.round(t.length / 3)); },
+    stage: (n, s) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); endThink(); markStage(n); push('\n' + bold(cyan('◆ ' + n)) + (s ? grey('  ' + s) : '') + '\n'); },
+    step: (role, ins) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); endThink(); const s0 = String(ins).replace(/\s+/g, ' ').trim(); const s = s0.length > 40 ? s0.slice(0, 40) + '…' : s0; push(grey('└─ ') + bold(role) + grey(' · ' + s)); },
+    think: (role, note) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); think = { startedAt: Date.now(), note: String(note || ''), reasonBuf: '' }; scheduleRender(); },
+    // 推理流（reasoning_content）：实时累积，界面上滚动展示最新一句
+    reason: (t) => { if (interrupted) throw new Error('__INTERRUPT__'); if (think) think.reasonBuf += t; scheduleRender(); },
+    token: (t) => { if (interrupted) throw new Error('__INTERRUPT__'); endThink(); streamBuf += t; tokens += Math.max(1, Math.round(t.length / 3)); },
     end: () => flushStream(),
-    tool: (name, args, o) => { flushStream(); push(grey('  ⚙ ') + cyan(name) + grey('(' + JSON.stringify(args || {}).slice(0, 60) + ')')); if (o) vwrap('    ↳ ' + String(o).slice(0, 160), 200).forEach((l) => push(grey(l))); },
-    result: (label, text) => { flushStream(); push('\n' + yellow('◆ ' + label) + '  ' + String(text).slice(0, 200) + '\n'); pushReply(yellow('◆ ' + label) + '  ' + String(text).slice(0, 200)); },
-    gaps: (items) => { flushStream(); (items || []).forEach((g) => push(yellow('✗ ' + g))); },
-    info: (m) => { flushStream(); const s = String(m).replace(/\s+/g, ' ').trim(); push(grey(s.length > 60 ? s.slice(0, 60) + '…' : s)); },
+    tool: (name, args, o) => { flushStream(); endThink(); push(grey('  ⚙ ') + cyan(name) + grey('(' + JSON.stringify(args || {}).slice(0, 60) + ')')); if (o) vwrap('    ↳ ' + String(o).slice(0, 160), 200).forEach((l) => push(grey(l))); },
+    result: (label, text) => { flushStream(); endThink(); push('\n' + yellow('◆ ' + label) + '  ' + String(text).slice(0, 200) + '\n'); pushReply(yellow('◆ ' + label) + '  ' + String(text).slice(0, 200)); },
+    gaps: (items) => { flushStream(); endThink(); (items || []).forEach((g) => push(yellow('✗ ' + g))); },
+    info: (m) => { flushStream(); endThink(); const s = String(m).replace(/\s+/g, ' ').trim(); push(grey(s.length > 60 ? s.slice(0, 60) + '…' : s)); },
     done: () => flushStream(),
   });
 
@@ -420,12 +458,32 @@ async function runInteractive(baseCfg, flags, plugins) {
         : role
         ? cyan(m ? m.model : role)
         : yellow('未配置模型 · 先运行 omniagent init')) + grey(' · ' + process.cwd()) + (mock ? yellow(' · mock') : '');
-    const hintL = busy ? grey('·········') + ' esc interrupt' : '';
+    // 忙碌时的实时思考进度行（✽ Thinking… 秒数 + 最新一句推理内容）
+    const busyRows = [];
+    if (busy) {
+      const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+      const spin = SPIN[Math.floor(Date.now() / 120) % SPIN.length];
+      if (think) {
+        const secs = ((Date.now() - think.startedAt) / 1000).toFixed(1);
+        const note = think.note ? grey(' · ' + think.note) : '';
+        busyRows.push(cutPlain(yellow(`${spin} 推理中 ${secs}s`) + note + grey('   esc×2 中断'), MW));
+        if (think.reasonBuf) {
+          // 推理流（reasoning_content）：滚动展示最新的一句思考内容
+          const last = think.reasonBuf.replace(/\s+/g, ' ').trim().slice(-Math.max(20, MW - 8));
+          busyRows.push(cutPlain(dim('  └ ' + last), MW));
+        } else {
+          busyRows.push(cutPlain(dim('  └ 等待模型返回推理内容…'), MW));
+        }
+      } else {
+        busyRows.push(cutPlain(yellow(`${spin} 工作中…`) + grey(` ${tokens} tokens · esc×2 中断`), MW));
+      }
+    }
+    const hintL = busy ? (pendingQueue.length ? grey(`✉ 已排队 ${pendingQueue.length} 条 · `) : '') + grey('esc×2 中断') : '';
     const hintR = 'tab for agents · ? for shortcuts';
     const hintPad = Math.max(1, MW - vlen(hintL) - vlen(hintR) - 2);
     const hintRow = hintL + ' '.repeat(hintPad) + hintR;
 
-    const fixedRows = 1 + 1 + popRows.length + 1 + 1; // brand+input+popup+agent+hints
+    const fixedRows = 1 + 1 + popRows.length + 1 + 1 + busyRows.length; // brand+input+popup+agent+hints+busy
     const showN = Math.max(1, H - fixedRows);
     const head = transcript.length > showN ? grey('… （上方还有 ' + (transcript.length - showN) + ' 行）') : '';
     const body = transcript.slice(-showN);
@@ -441,7 +499,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     while (main.length < showN) main.push('');
     main.splice(0, Math.max(0, main.length - showN));
     main.unshift(brand);
-    main.push(...popRows, inputRow, agRow, hintRow);
+    main.push(...busyRows, ...popRows, inputRow, agRow, hintRow);
 
     // ---- 右栏：工作树（多模型协作流水线实时进度）----
     right = workTreeLines(H, RW);
@@ -477,6 +535,57 @@ async function runInteractive(baseCfg, flags, plugins) {
     out('\x1b[H\x1b[2J' + rows.join('\n') + '\n' + `\x1b[${Math.max(1, main.length - 2)};${4 + vlen(typedO)}H`);
   }
 
+  // ---------- /models add 向导：批量添加 OpenAI 兼容模型（逐项问答，esc 取消） ----------
+  const MW_STEPS = [
+    ['provider', '供应商显示名称', '界面上展示的供应商名，如 OpenRouter / DeepSeek / LM Studio', ''],
+    ['base_url', '接口地址 URL（OpenAI 兼容）', '以 http(s):// 开头，如 https://openrouter.ai/api/v1', 'https://api.openai.com/v1'],
+    ['api_key',  'API Key', '仅保存在本机 .omni/config.json；本地服务（如 LM Studio）可填 local', ''],
+    ['model',    '模型 ID', '供应商的 model 标识，如 deepseek/deepseek-chat 或 gpt-4o-mini', ''],
+    ['display',  '模型显示名称', '界面上展示的名字，如 DeepSeek V3（回车 = 同模型 ID）', ''],
+  ];
+  function pushWizardQ() {
+    const [, q, hint, def] = MW_STEPS[mw.step];
+    push(yellow(`[添加模型 · ${mw.step + 1}/5] `) + bold(q) + grey(' — ' + hint) + (def ? grey(`（回车 = ${def}）`) : ''));
+  }
+  function startModelWizard() {
+    mw = { step: 0, entries: [], cur: {}, confirming: false };
+    push(bold('—— 添加模型（仅支持 OpenAI 兼容接口，可连续添加多个）——') + grey('  esc 取消'));
+    pushWizardQ();
+  }
+  function saveModelEntries() {
+    for (const e of mw.entries) {
+      let id = (e.model || 'model').replace(/[^a-zA-Z0-9_.-]/g, '-').replace(/^-+/, '') || 'model';
+      const base = id; let n = 2;
+      while (cfg.models[id]) id = base + '-' + n++;
+      cfg.models[id] = { base_url: e.base_url, api_key: e.api_key, model: e.model, provider: e.provider, display: e.display || e.model };
+      push(green('  ✓ 已保存 ') + cyan(e.display || id) + grey(`  → 键名 ${id} · ${e.provider} · ${e.model}`));
+    }
+    saveConfig(cfg);
+    push(green(`共添加 ${mw.entries.length} 个模型，已写入 .omni/config.json`) + grey('。/models 查看；/model <键名> 可临时统一模型。'));
+    mw = null;
+  }
+  function handleModelWizard(raw) {
+    if (mw.confirming) {
+      const v = raw.trim().toLowerCase();
+      if (!v || v === 'n' || v === 'no') { saveModelEntries(); return; }
+      if (v === 'y' || v === 'yes') { mw.confirming = false; mw.step = 0; mw.cur = {}; pushWizardQ(); return; }
+      push(grey('（y 继续添加 / 回车保存并结束）')); return;
+    }
+    const [field, , , def] = MW_STEPS[mw.step];
+    const v = raw.trim() || def;
+    if (mw.step === 0 && !v) { push(yellow('供应商名称不能为空')); pushWizardQ(); return; }
+    if (mw.step === 1 && !/^https?:\/\//i.test(v)) { push(yellow('URL 需以 http(s):// 开头（只接受 OpenAI 兼容接口）')); pushWizardQ(); return; }
+    if (mw.step === 2 && !v) { push(yellow('API Key 不能为空（本地服务可填 local）')); pushWizardQ(); return; }
+    if (mw.step === 3 && !v) { push(yellow('模型 ID 不能为空')); pushWizardQ(); return; }
+    mw.cur[field] = v;
+    push(grey('  → ' + (field === 'api_key' ? maskKey(v) : v)));
+    if (mw.step < 4) { mw.step++; pushWizardQ(); return; }
+    mw.entries.push(mw.cur);
+    push(green(`  ✓ 已暂存「${mw.cur.display || mw.cur.model}」（本次共 ${mw.entries.length} 个）`));
+    mw.confirming = true;
+    push(bold('继续添加下一个模型？') + grey('（y = 继续 / 回车 = 保存并结束）'));
+  }
+
   function missingKeys() {
     const roles = chatModel ? [{ model: chatModel }] : Object.values(cfg.roles || {});
     const bad = [];
@@ -507,6 +616,23 @@ async function runInteractive(baseCfg, flags, plugins) {
     } else if (t === '/plugins') {
       push(bold(`已装插件 ${pluginNames.length} 个：`));
       pluginNames.forEach((p) => push('  ' + cyan('● ' + p.name) + grey(` · ${p.n} 个工具 · 已加载`)));
+    } else if (t === '/models' || t === '/models add') {
+      if (t === '/models add') {
+        if (mw) push(yellow('添加模型向导已在进行中，请继续回答（esc 取消）'));
+        else startModelWizard();
+        return true;
+      }
+      const list = Object.entries(cfg.models || {});
+      if (!list.length) { push(yellow('尚未配置任何模型。') + grey('输入 /models add 批量添加 OpenAI 兼容模型')); return true; }
+      push(bold(`已配置模型 ${list.length} 个`) + grey('（/models add 添加 · /model <键名> 统一切换）'));
+      for (const [id, m] of list) {
+        const prov = m.provider || guessProvider(m.base_url);
+        const disp = m.display || m.model;
+        push('  ' + cyan(disp));
+        push(grey(`      键名 ${id} · 供应商 ${prov}`));
+        push(grey(`      model ${m.model} @ ${m.base_url} · key ${maskKey(m.api_key)}`));
+      }
+      return true;
     } else if (t.startsWith('/model ')) {
       const id = t.slice(7).trim();
       if (cfg.models?.[id]) { chatModel = id; push(green('本次会话统一模型：' + id)); }
@@ -523,6 +649,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     const t = raw.trim();
     line = '';
     popupOpen = false;
+    if (mw) { handleModelWizard(raw); render(); return; } // 添加模型向导接管输入
     if (!t) { render(); return; }
     if (!started) {
       started = true;
@@ -535,7 +662,10 @@ async function runInteractive(baseCfg, flags, plugins) {
     if (bad.length) { push(yellow('以下模型缺少有效密钥：' + bad.join(', ')) + grey('（输入 /mock 体验演示，或去配置页填 key）')); render(); return; }
     let runCfg = cfg;
     if (chatModel) { runCfg = structuredClone(cfg); for (const rr of Object.values(runCfg.roles)) rr.model = chatModel; }
-    busy = true; interrupted = false; tokens = 0; stageCurKey = null; stagesDone.clear();
+    busy = true; interrupted = false; lastEscAt = 0; tokens = 0; stageCurKey = null; stagesDone.clear();
+    // 忙碌期间定时重绘：让「✽ Thinking… x.xs」的秒数与推理文本持续刷新
+    if (busyTick) clearInterval(busyTick);
+    busyTick = setInterval(() => { if (busy) render(); }, 200); // 刷新转轮/秒数/推理文本
     render();
     (async () => {
       try {
@@ -549,8 +679,12 @@ async function runInteractive(baseCfg, flags, plugins) {
         if (String(e?.message).includes('__INTERRUPT__')) push(yellow('⏹ 已中断（esc interrupt）'));
         else push('\n' + String(e?.message || e) + '\n');
       }
-      busy = false; interrupted = false; streamBuf = '';
+      const wasInt = interrupted;
+      busy = false; interrupted = false; streamBuf = ''; think = null;
+      if (busyTick) { clearInterval(busyTick); busyTick = null; }
       render();
+      // 模型工作时用户输入的指令，按序自动继续执行
+      if (!wasInt && pendingQueue.length) { const nx = pendingQueue.shift(); submit(nx); }
     })();
   }
 
@@ -563,11 +697,34 @@ async function runInteractive(baseCfg, flags, plugins) {
       else { if (!line.startsWith('/')) line = '/'; popupSel = 0; popupOpen = popupEntries() != null; if (!popupOpen) { line = ''; push(yellow('没有匹配的命令')); } }
       render(); return;
     }
+    // 模型工作时：仍可继续打字（回车即排队），esc 需连按两次才中断
     if (busy) {
-      if (key.name === 'escape') { interrupted = true; }
+      if (key.name === 'escape') {
+        const now = Date.now();
+        if (now - lastEscAt < 900) { // 双击：中断
+          lastEscAt = 0; interrupted = true;
+          push(yellow('⏹ 正在中断当前任务…'));
+          render();
+        } else { // 单击：提示再按一次
+          lastEscAt = now;
+          push(grey('· 再按一次 esc 中断当前任务'));
+          render();
+        }
+        return;
+      }
+      if (key.name === 'return' || key.name === 'enter') {
+        if (line.trim()) { pendingQueue.push(line.trim()); push(grey('✉ 已排队 ') + bold(line.trim())); line = ''; popupOpen = false; }
+        render(); return;
+      }
+      if (key.name === 'backspace') { line = [...line].slice(0, -1).join(''); render(); return; }
+      if (str && !key.ctrl && !key.meta) { const clean = str.replace(/[\r\n]/g, ''); if (clean) { line += clean; render(); } }
       return;
     }
-    if (key.name === 'escape') { if (popupOpen) { popupOpen = false; render(); } else if (line) { line = ''; render(); } return; }
+    if (key.name === 'escape') {
+      lastEscAt = 0;
+      if (mw) { push(yellow('✕ 已取消添加模型')); mw = null; render(); return; }
+      if (popupOpen) { popupOpen = false; render(); } else if (line) { line = ''; render(); } return;
+    }
     if (key.name === 'up') { if (popupOpen) { const n = popupEntries()?.length || 1; popupSel = (popupSel - 1 + n) % n; render(); } return; }
     if (key.name === 'down') { if (popupOpen) { const n = popupEntries()?.length || 1; popupSel = (popupSel + 1) % n; render(); } return; }
     if (key.name === 'tab') {
@@ -592,13 +749,30 @@ async function runInteractive(baseCfg, flags, plugins) {
     }
   }
 
+  let altOn = false; // 是否已进入独立窗口（alternate screen buffer）
+  function enterAltScreen() {
+    if (altOn) return;
+    altOn = true;
+    out('\x1b[?1049h\x1b[?1h\x1b[2J\x1b[H'); // 切换到独立窗口并清屏
+  }
+  function leaveAltScreen() {
+    if (!altOn) return;
+    altOn = false;
+    out('\x1b[?1l\x1b[?1049l'); // 切回原终端内容
+  }
   function exitTui() {
+    if (busyTick) { clearInterval(busyTick); busyTick = null; }
     try { process.stdin.setRawMode(false); } catch {}
     process.stdin.removeListener('keypress', onKey);
     process.stdin.pause();
-    out('\n' + grey('再见。') + '\n');
+    leaveAltScreen();
+    out(grey('再见。') + '\n');
     process.exit(0);
   }
+  // 异常退出（ctrl+c 信号 / 崩溃）也要还回原终端画面
+  process.on('SIGINT', () => exitTui());
+  process.on('SIGTERM', () => exitTui());
+  process.on('exit', () => leaveAltScreen());
 
   // 启动画面
   // 欢迎屏（与 Codex 一致：顶栏 + 居中标志 + 右侧栏目）由下方 render() 绘制
@@ -607,7 +781,10 @@ async function runInteractive(baseCfg, flags, plugins) {
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.on('keypress', onKey);
+  enterAltScreen();
   render();
+  // 终端尺寸变化：自动重排两栏布局
+  process.stdout.on?.('resize', () => render());
 
   while (true) await waitInput();
 }
@@ -760,8 +937,13 @@ async function main() {
     const cfg = loadConfig();
     if (!cfg) { ui.error('尚未初始化，请先运行 init'); return; }
     ui.header('模型列表');
-    for (const [id, m] of Object.entries(cfg.models || {})) {
-      ui.info(`· ${id}: ${m.model} @ ${m.base_url} (key:${maskKey(m.api_key)})`);
+    const ms = Object.entries(cfg.models || {});
+    if (!ms.length) ui.info('（暂无模型。在交互界面里输入 /models add 可批量添加 OpenAI 兼容模型）');
+    for (const [id, m] of ms) {
+      const prov = m.provider || guessProvider(m.base_url);
+      ui.info(`· ${m.display || m.model}  [键名 ${id}]`);
+      ui.info(`    供应商 ${prov} · model ${m.model}`);
+      ui.info(`    ${m.base_url}  (key:${maskKey(m.api_key)})`);
     }
     return;
   }
