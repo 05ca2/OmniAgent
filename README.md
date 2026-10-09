@@ -39,14 +39,22 @@ npm install -g .
 omniagent init
 ```
 
-会**在终端里直接问你**三件事，填完即就绪（所有岗位统一使用，之后可手工改成多模型协作）：
+会**以问卷形式一题一题问你**（直接回车 = 使用括号中的默认值；密钥输入不回显）：
 
 ```
-初始化 OmniAgent（预设 full）
-填写 API 信息（所有岗位模型将统一使用，之后可手工改为多模型协作）：
-API base_url (https://api.openai.com/v1):
-API key: ********
-模型名 (gpt-4o-mini):
+◆ 初始化 OmniAgent（预设 full）
+请依次回答以下问题（直接回车 = 使用括号中的默认值）：
+
+[1/4] API base_url (https://api.openai.com/v1): http://token.sensenova.cn/v1
+[2/4] API key（输入不回显）: (已录入)
+[3/4] 模型名 (gpt-4o-mini): deepseek-chat
+
+—— 请确认 ——
+base_url: http://token.sensenova.cn/v1
+模型名:   deepseek-chat
+API key:  sk-y****eHs
+[4/4] 确认写入以上配置？ (Y): y
+
 ✓ 配置已写入：D:\...\OmniAgent\.omni\config.json
 ✓ 初始化完成 ✓  直接运行  omniagent  即可进入界面（无需任何参数）。
 ```

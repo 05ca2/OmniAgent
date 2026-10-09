@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
+import { Writable } from 'node:stream';
 import { OMNI_DIR, PLUGIN_DIR, CONFIG_PATH, RUNS_DIR, configExists, loadConfig, saveConfig, ensureDirs } from '../src/config.js';
 import { PRESETS, buildConfigFromPreset, listPresets } from '../src/presets.js';
 import { loadPlugins } from '../src/plugins/index.js';
@@ -44,40 +45,21 @@ OmniAgent —— 多模型协作智能体开发工具
   node bin/omni.js run "调研 RAG 的主流方案" --preset research
 `;
 
-// ---- 交互式输入辅助（仅在真正终端下使用）----
-function ask(q, def) {
+// ---- 问卷式输入辅助（全部基于 readline，粘贴/中文/退格均可靠）----
+const MUTE_OUT = new Writable({ write(_c, _e, cb) { cb(); } }); // 吞掉回显，用于密钥输入
+
+// 询问一题；no/total 显示 [1/4] 编号；secret=true 不回显
+function askQ(no, total, q, { def = '', secret = false } = {}) {
   return new Promise((res) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(`${q}${def ? ' (' + def + ')' : ''}: `, (a) => { rl.close(); res(a.trim() || def || ''); });
-  });
-}
-function askSecret(q) {
-  return new Promise((res) => {
-    process.stdout.write(`${q}: `);
-    if (!process.stdin.isTTY) { // 非终端（管道）：退化为明文读取
-      let buf = '';
-      process.stdin.once('data', (d) => res(d.toString().replace(/[\r\n]+$/, '')));
-      return;
-    }
-    process.stdin.setRawMode(true);
-    let buf = '';
-    const onData = (c) => {
-      const s = c.toString();
-      if (s === '\r' || s === '\n') {
-        process.stdout.write('\n');
-        process.stdin.setRawMode(false);
-        process.stdin.removeListener('data', onData);
-        res(buf);
-      } else if (s === '' || s === '') { // esc / ctrl-c
-        process.stdout.write('\n');
-        process.stdin.setRawMode(false);
-        process.stdin.removeListener('data', onData);
-        res('');
-      } else if (s === '') { // backspace
-        if (buf) { buf = buf.slice(0, -1); process.stdout.write(' '); }
-      } else { buf += s; process.stdout.write('*'); }
-    };
-    process.stdin.on('data', onData);
+    const prefix = total ? '[' + no + '/' + total + '] ' : '';
+    const suffix = def ? ' (' + def + ')' : '';
+    process.stdout.write(prefix + q + suffix + (secret ? '（输入不回显）' : '') + ': ');
+    const rl = readline.createInterface({ input: process.stdin, output: secret ? MUTE_OUT : process.stdout, terminal: true });
+    rl.question('', (a) => {
+      rl.close();
+      if (secret) process.stdout.write('(已录入)\n');
+      res(a.trim() || def);
+    });
   });
 }
 
@@ -630,10 +612,21 @@ async function main() {
 
     if (process.stdin.isTTY) {
       ui.header(`初始化 OmniAgent（预设 ${name}）`);
-      ui.info('填写 API 信息（所有岗位模型将统一使用，之后可手工改为多模型协作）：');
-      const base = await ask('API base_url', 'https://api.openai.com/v1');
-      const key = await askSecret('API key');
-      const model = await ask('模型名', 'gpt-4o-mini');
+      ui.info('请依次回答以下问题（直接回车 = 使用括号中的默认值）：');
+      console.log('');
+      const base = await askQ(1, 4, 'API base_url', { def: 'https://api.openai.com/v1' });
+      const key = await askQ(2, 4, 'API key', { secret: true });
+      const model = await askQ(3, 4, '模型名', { def: 'gpt-4o-mini' });
+      console.log('');
+      ui.info('—— 请确认 ——');
+      ui.info(`base_url: ${base}`);
+      ui.info(`模型名:   ${model}`);
+      ui.info(`API key:  ${maskKey(key)}`);
+      console.log('');
+      const okc = await askQ(4, 4, '确认写入以上配置？', { def: 'Y' });
+      console.log('');
+      if (!/^y(es)?$/i.test(okc.trim())) { ui.warn('已取消，未写入任何配置。'); return; }
+      if (!key) ui.warn('API key 为空：界面可进入但调用模型会失败，可先 /mock 体验演示模式，或重跑 init 补填。');
       for (const m of Object.values(cfg.models)) { m.base_url = base; m.api_key = key; m.model = model; }
       saveConfig(cfg);
       ui.ok(`配置已写入：${CONFIG_PATH}`);
