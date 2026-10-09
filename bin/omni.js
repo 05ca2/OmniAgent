@@ -728,6 +728,7 @@ async function runInteractive(baseCfg, flags, plugins) {
       const BW = Math.min(58, Math.max(40, W - 8));
       const modelIdxs = rows.map((r, i) => (r.kind === 'model' ? i : -1)).filter((i) => i >= 0);
       const lines = [];
+      const zoneRows = []; // 待定位的点击行（padTop 计算后再换算屏幕行号）
       const title = ' Select model ';
       lines.push(cyan('┌' + title + '─'.repeat(Math.max(2, BW - title.length - 2)) + '┐') + grey('  esc 关闭'));
       const q = ' │ Search: ' + (picker.q || fgDim('输入即搜索…'));
@@ -749,10 +750,7 @@ async function runInteractive(baseCfg, flags, plugins) {
           ? '\x1b[48;5;208m\x1b[38;5;16m' + cutPlain(inner + ' ', BW + 4) + '\x1b[0m'
           : cutPlain(inner, BW + 4) + (r.kind === 'provider' ? '' : cyan(' │'));
         lines.push(rowStr);
-        if (r.kind === 'model') {
-          const y = lines.length + 1; // 该行在屏幕上的 1-based 行号
-          clickZones.push({ x1: 2, y1: y, y2: y, x2: W - 12, act: { t: 'pick', id: r.id } });
-        }
+        if (r.kind === 'model') zoneRows.push({ y: lines.length - 1, id: r.id });
       });
       lines.push(cyan(' └' + '─'.repeat(BW) + '┘'));
       lines.push(grey('   ↵ 选择 · ↑↓ 移动 · 输入即搜索 · 点击可选 · esc 关闭'));
@@ -762,44 +760,54 @@ async function runInteractive(baseCfg, flags, plugins) {
       page.push(...lines);
       page.length = H;
       while (page.length < H) page.push('');
+      zoneRows.forEach((z) => clickZones.push({ x1: 2, y1: padTop + z.y + 1, y2: padTop + z.y + 1, x2: W - 12, act: { t: 'pick', id: z.id } }));
       out('\x1b[?25h\x1b[H\x1b[2J' + page.join('\n') + '\x1b[?25l');
       return;
     }
 
-    // ---- 设置页：岗位模型映射 + hoa-loop 个性化 + 添加模型 ----
+    // ---- 设置页：居中小窗（岗位模型映射 + hoa-loop 个性化 + 添加模型）----
     if (settings) {
       clickZones.length = 0;
       const items = settingsItems();
       settings.sel = Math.max(0, Math.min(settings.sel, items.length - 1));
+      const BW = Math.min(64, Math.max(44, W - 10));
       const lines = [];
-      lines.push(bold(cyan('← OmniAgent')) + grey(' · 设置') + grey('（修改即保存到 .omni/config.json）'));
-      lines.push(grey('─'.repeat(Math.max(10, W - 2))));
+      const zoneRows = []; // 待定位的点击行（padTop 计算后再换算屏幕行号）
+      const title = ' Settings ';
+      lines.push(cyan('┌' + title + '─'.repeat(Math.max(2, BW - title.length - 2)) + '┐') + grey('  esc 返回'));
+      lines.push(cyan(' │' + '─'.repeat(BW) + '│'));
       items.forEach((it, i) => {
         const sel = i === settings.sel;
-        let text;
-        if (it.t === 'addModel') text = cyan(it.label);
+        let inner;
+        if (it.t === 'addModel') inner = cyan(' │ ') + (sel ? bold(it.label) : cyan(it.label));
         else if (it.t === 'role') {
           const m = cfg.models[it.model];
           const disp = m ? (m.display || m.model) : (it.model || '—');
           const nm = '  ' + it.role;
           const val = cyan('◀ ' + disp + ' ▶');
-          const pad = Math.max(1, W - 6 - vlen(nm) - vlen(val) - 8);
-          text = nm + ' '.repeat(pad) + grey('模型: ') + val;
+          const pad = Math.max(1, BW - 2 - vlen(nm) - vlen(val));
+          inner = cyan(' │ ') + nm + ' '.repeat(pad) + val;
         } else if (it.t === 'num') {
           const val = cyan('◀ ' + (cfg.pipeline?.[it.key] ?? 1) + ' ▶');
-          const pad = Math.max(1, W - 6 - vlen(it.label) - vlen(val));
-          text = '  ' + it.label + ' '.repeat(pad) + val;
-        } else text = grey('  ' + it.label);
-        const rowStr = sel ? '\x1b[48;5;236m' + cutPlain(text + ' ', W - 2) + '\x1b[0m' : cutPlain(text, W - 2);
+          const pad = Math.max(1, BW - 2 - vlen(it.label) - vlen(val));
+          inner = cyan(' │ ') + '  ' + it.label + ' '.repeat(pad) + val;
+        } else inner = cyan(' │ ') + grey(it.label);
+        const rowStr = sel
+          ? '\x1b[48;5;208m\x1b[38;5;16m' + cutPlain(inner + ' ', BW + 4) + '\x1b[0m'
+          : cutPlain(inner, BW + 4) + (it.t === 'info' ? '' : cyan(' │'));
         lines.push(rowStr);
-        const y = lines.length + 1;
-        if (it.t !== 'info') clickZones.push({ x1: 1, y1: y, y2: y, x2: W, act: { t: 'set', i } });
+        if (it.t !== 'info') zoneRows.push({ y: lines.length - 1, i });
       });
-      while (lines.length < H - 2) lines.push('');
-      lines.length = H - 2;
-      lines.push(grey('─'.repeat(Math.max(0, W - 4))));
-      lines.push(grey('  ↑↓ 选择 · ↵/◀▶ 或点击 修改 · esc 返回'));
-      out('\x1b[?25h\x1b[H\x1b[2J' + lines.join('\n') + '\x1b[?25l');
+      lines.push(cyan(' └' + '─'.repeat(BW) + '┘'));
+      lines.push(grey('   ↑↓ 选择 · ←→/↵ 或点击 修改 · esc 返回'));
+      const padTop = Math.max(0, Math.floor((H - lines.length) / 3));
+      const page = [];
+      for (let i = 0; i < padTop; i++) page.push('');
+      page.push(...lines);
+      page.length = H;
+      while (page.length < H) page.push('');
+      zoneRows.forEach((z) => clickZones.push({ x1: 2, y1: padTop + z.y + 1, y2: padTop + z.y + 1, x2: BW + 6, act: { t: 'set', i: z.i } }));
+      out('\x1b[?25h\x1b[H\x1b[2J' + page.join('\n') + '\x1b[?25l');
       return;
     }
 
@@ -1010,6 +1018,9 @@ async function runInteractive(baseCfg, flags, plugins) {
       if (s2) { view = s2.key; viewOffset = 0; }
       else push(yellow('没有编号为 ' + arg + ' 的子会话（/open 查看列表）'));
       return true;
+    } else if (t === '/settings') {
+      openSettings(); // 打开设置小窗（岗位模型/并发/核查轮数/添加模型）
+      return true;
     } else if (t === '/model' || t.startsWith('/model ')) {
       if (t === '/model') { openPicker(); return true; }
       const id = t.slice(7).trim();
@@ -1148,6 +1159,39 @@ async function runInteractive(baseCfg, flags, plugins) {
       if (popupOpen) { popupOpen = false; }
       else { if (!line.startsWith('/')) line = '/'; popupSel = 0; popupOpen = popupEntries() != null; if (!popupOpen) { line = ''; push(yellow('没有匹配的命令')); } }
       render(); return;
+    }
+    // 设置页：↑↓ 选择，←→/↵ 修改（首项 ↵ = 打开添加模型向导），esc 返回
+    if (settings) {
+      const items = settingsItems();
+      if (key.name === 'escape') { settings = null; render(); return; }
+      if (key.name === 'up') { settings.sel = (settings.sel - 1 + items.length) % items.length; render(); return; }
+      if (key.name === 'down') { settings.sel = (settings.sel + 1) % items.length; render(); return; }
+      if (key.name === 'left') { adjustSetting(items[settings.sel], -1); return; }
+      if (key.name === 'right' || key.name === 'return' || key.name === 'enter') { adjustSetting(items[settings.sel], 1); return; }
+      return;
+    }
+    // 选择模型界面：输入即搜索，↑↓ 选择（跳过供应商标题），↵ 确认，esc 关闭
+    if (picker) {
+      if (key.name === 'escape') { picker = null; render(); return; }
+      if (key.name === 'up') { pickerMove(-1); return; }
+      if (key.name === 'down') { pickerMove(1); return; }
+      if (key.name === 'return' || key.name === 'enter') {
+        const r = pickerRows()[picker.sel];
+        if (r && r.kind === 'model') pickerConfirm(r.id);
+        return;
+      }
+      if (key.name === 'backspace') { picker.q = (picker.q || '').slice(0, -1); picker.sel = pickerRows().findIndex((r) => r.kind === 'model'); if (picker.sel < 0) picker.sel = 0; render(); return; }
+      if (str && !key.ctrl && !key.meta) {
+        const clean = str.replace(/[\r\n]/g, '');
+        if (clean) {
+          picker.q = (picker.q || '') + clean;
+          picker.sel = pickerRows().findIndex((r) => r.kind === 'model'); // 搜索后直接定位到第一个模型行
+          if (picker.sel < 0) picker.sel = 0;
+          render();
+        }
+        return;
+      }
+      return;
     }
     // 模型工作时：仍可继续打字（回车即排队），esc 需连按两次才中断
     if (busy) {
