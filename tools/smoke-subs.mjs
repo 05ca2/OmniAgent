@@ -125,16 +125,22 @@ try {
   await sleep(120);
   if (!state().mw) ok('esc 取消向导'); else fail('向导未取消');
 
-  // ===== 6) 命令弹层点击 → 直接执行 =====
-  let done = false;
-  for (let row = 25; row <= 35 && !done; row++) { // 自弹层顶部向下逐行尝试（避开底部 /exit）
-    type('/'); // 重新打开命令弹层
-    await sleep(50);
-    mouse(5, row);
-    await sleep(60);
-    if (state().transcript.some((l) => l.includes('已配置模型') || l.includes('尚未配置任何模型'))) done = true;
-  }
-  if (done) ok('点击命令弹层直接执行（/models）'); else fail('命令弹层点击无效');
+  // ===== 6) 命令弹层点击 → 直接执行（/models 现在打开 Select model 小窗，改用 /clear 验证）=====
+  type('/'); // 打开命令弹层
+  await sleep(60);
+  st = state();
+  const cz = st.zones.find((z) => z.t === 'cmd' && z.act && z.act.cmd === '/clear');
+  mouse(5, cz ? cz.y1 : 30);
+  await sleep(80);
+  if (!state().transcript.length) ok('点击命令弹层直接执行（/clear 清屏）'); else fail('命令弹层点击无效');
+  // 6b) /models 回车 → 打开 Select model 小窗（出现 pick 热区）
+  type('/models');
+  await sleep(60);
+  enter();
+  await sleep(120);
+  if (state().zones.some((z) => z.t === 'pick')) ok('/models 打开选择模型小窗'); else fail('/models 未打开小窗');
+  escKey();
+  await sleep(120);
 
   realWrite(exitCode === 0 ? '\n[SUBS] PASS\n' : '\n[SUBS] FAIL\n');
 } catch (e) {
