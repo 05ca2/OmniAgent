@@ -24,11 +24,21 @@ export async function runPipeline(task, cfg, plugins, ctx, mock = false, trace) 
   let planJson = null;
   const results = [];
 
-  // 1) Director 拆解
+  // 1) Director 拆解（发现关键不确定点时，可先发澄清问卷）
   if (stages.includes('director') && cfg.roles.director) {
+    const CLARIFY_RULE = '\n\n【重要】若任务存在影响拆解的关键不确定点（目标/范围/技术栈/平台/优先级等），先不要拆解，改为输出：\n{"need_clarification": true, "questions": ["问题1", "问题2", ...]}\n（问题不超过 5 个，只问真正影响方案的；没有不确定点就直接输出拆解 JSON）';
     T.stage?.('指挥 Director', '把任务拆成工作项');
-    const out = await runAgent(cfg.roles.director, `用户任务：\n${task}`, env, { streamTokens: false });
+    let out = await runAgent(cfg.roles.director, `用户任务：\n${task}${CLARIFY_RULE}`, env, { streamTokens: false });
     dirJson = parseJSON(out);
+    // 澄清回路：把用户逐题回答的答案拼回任务，重新拆解
+    if (dirJson?.need_clarification && Array.isArray(dirJson.questions) && dirJson.questions.length && typeof T.clarify === 'function') {
+      T.stage?.('澄清 Clarify', `${dirJson.questions.length} 个问题需要确认`);
+      const answers = await T.clarify(dirJson.questions);
+      const supplement = dirJson.questions.map((q, i) => `问：${q}\n答：${answers?.[i] ?? '（未回答）'}`).join('\n');
+      T.info?.('已收到补充说明，重新拆解任务');
+      out = await runAgent(cfg.roles.director, `用户任务：\n${task}\n\n用户补充说明：\n${supplement}\n\n请基于以上信息完成拆解（若已足够清晰，直接输出拆解 JSON）。`, env, { streamTokens: false });
+      dirJson = parseJSON(out);
+    }
     T.result?.('总览', dirJson.overview || '(无)');
     (dirJson.items || []).forEach((it) => T.info?.(`· [${it.role}] ${it.title} —— ${it.goal}`));
   }

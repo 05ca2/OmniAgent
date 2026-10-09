@@ -32,9 +32,9 @@ export async function runAgent(role, userContent, env, opts = {}) {
       stream: !mock,
       mock,
       mockRole: role.id,
-      onToken: streamTokens ? (t) => T.token?.(t) : undefined,
+      onToken: streamTokens ? (t) => T.token?.(t, role.id) : undefined,
       // 推理进度始终透传（即便 token 流被屏蔽的结构化阶段），供界面实时展示思考进度
-      onReason: (t) => T.reason?.(t),
+      onReason: (t) => T.reason?.(t, role.id),
     });
     if (!mock) T.end?.();
 
@@ -57,7 +57,7 @@ export async function runAgent(role, userContent, env, opts = {}) {
       } catch (e) {
         out = `工具执行出错: ${e.message}`;
       }
-      T.tool?.(tc.name, safeParse(tc.arguments), out);
+      T.tool?.(tc.name, safeParse(tc.arguments), out, role.id);
       messages.push({ role: 'tool', tool_call_id: tc.id, content: String(out) });
     }
   }

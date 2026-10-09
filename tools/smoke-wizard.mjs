@@ -14,7 +14,7 @@ process.stdin.removeListener = () => {};
 process.stdin.once = () => {};
 
 let keyHandler = null;
-process.stdin.on = (ev, cb) => { if (ev === 'keypress') keyHandler = cb; };
+process.stdin.on = (ev, cb) => { if (ev === 'data') keyHandler = cb; };
 
 const fs = await import('node:fs');
 const path = await import('node:path');

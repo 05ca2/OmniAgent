@@ -97,13 +97,21 @@ function mockChat(model, messages, tools, opts) {
   const kind = opts.mockRole;
   let content;
   if (kind === 'director') {
-    content = JSON.stringify({
-      overview: '（mock）将任务拆为「调研」与「实现」两步',
-      items: [
-        { title: '调研资料', role: 'researcher', goal: '收集完成任务所需的资料' },
-        { title: '编写产物', role: 'coder', goal: '编写并验证最终产物' },
-      ],
-    });
+    // mock 澄清演示：任务带 [clarify] 标记且尚未回答时，先返回澄清问卷
+    if (last.includes('[clarify]') && !last.includes('用户补充说明')) {
+      content = JSON.stringify({
+        need_clarification: true,
+        questions: ['这个任务的目标平台是什么？（Web / 桌面 / 移动）', '期望的完成标准是什么？'],
+      });
+    } else {
+      content = JSON.stringify({
+        overview: '（mock）将任务拆为「调研」与「实现」两步',
+        items: [
+          { title: '调研资料', role: 'researcher', goal: '收集完成任务所需的资料' },
+          { title: '编写产物', role: 'coder', goal: '编写并验证最终产物' },
+        ],
+      });
+    }
   } else if (kind === 'planner') {
     content = JSON.stringify({
       plan: [
