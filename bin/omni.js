@@ -116,6 +116,10 @@ const cyan = (s) => (IS_TTY ? `\x1b[36m${s}\x1b[0m` : String(s));
 const grey = (s) => (IS_TTY ? `\x1b[90m${s}\x1b[0m` : String(s));
 const yellow = (s) => (IS_TTY ? `\x1b[33m${s}\x1b[0m` : String(s));
 const green = (s) => (IS_TTY ? `\x1b[32m${s}\x1b[0m` : String(s));
+// 深色输入条背景（内置 fg 重置不吞背景色）
+const barBg = (s) => (IS_TTY ? `\x1b[48;5;236m${s}\x1b[0m` : String(s));
+const fgDim = (s) => (IS_TTY ? `\x1b[90m${s}\x1b[39m` : String(s));
+const INPUT_PH = 'Ask OmniAgent to do anything';
 
 // ---------- opencode 风格像素 Logo ----------
 const GLYPHS = {
@@ -227,6 +231,14 @@ async function runInteractive(baseCfg, flags, plugins) {
 
   function push(t) { transcript.push(t); }
   const replies = []; // 右栏：模型回复（流式文本 + 关键结果）
+  // 工作树状态：跟踪流水线阶段（director → planner → workers → verifier）
+  let stageCurKey = null;
+  const stagesDone = new Set();
+  function markStage(n) {
+    const s = String(n);
+    const key = s.includes('指挥') ? 'director' : s.includes('规划') ? 'planner' : s.includes('执行') ? 'workers' : (s.includes('检') || s.includes('验')) ? 'verifier' : null;
+    if (key) { stageCurKey = key; stagesDone.add(key); }
+  }
   function pushReply(t) { replies.push(t); }
   function flushStream() {
     if (!streamBuf) return;
@@ -236,7 +248,7 @@ async function runInteractive(baseCfg, flags, plugins) {
 
   // 流水线 trace：把事件写进对话区（而非 ui 直写终端）
   const tuiTrace = () => ({
-    stage: (n, s) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); push('\n' + bold(cyan('◆ ' + n)) + (s ? grey('  ' + s) : '') + '\n'); },
+    stage: (n, s) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); markStage(n); push('\n' + bold(cyan('◆ ' + n)) + (s ? grey('  ' + s) : '') + '\n'); },
     step: (role, ins) => { if (interrupted) throw new Error('__INTERRUPT__'); flushStream(); const s0 = String(ins).replace(/\s+/g, ' ').trim(); const s = s0.length > 40 ? s0.slice(0, 40) + '…' : s0; push(grey('└─ ') + bold(role) + grey(' · ' + s)); },
     think: (role, note) => { if (interrupted) throw new Error('__INTERRUPT__'); },
     token: (t) => { if (interrupted) throw new Error('__INTERRUPT__'); streamBuf += t; tokens += Math.max(1, Math.round(t.length / 3)); },
@@ -293,6 +305,41 @@ async function runInteractive(baseCfg, flags, plugins) {
     return L.slice(0, H);
   }
 
+  // 右栏：工作树 —— 实时展示多模型协作流水线与当前进度
+  function workTreeLines(H, RW) {
+    const w = Math.max(12, RW - 1);
+    const cut = (s) => cutPlain(s, w);
+    const names = { director: '指挥 Director', planner: '规划 Planner', workers: '执行 Workers', verifier: '检验 Verifier' };
+    const desc = { director: '拆解任务、分派岗位', planner: '制定顺序执行计划', workers: '多岗位并发协作执行', verifier: '核查结果并驱动修复' };
+    const stageKeys = cfg.pipeline?.stages || ['director', 'planner', 'workers', 'verifier'];
+    const curIdx = stageCurKey ? stageKeys.indexOf(stageCurKey) : -1;
+    const L = [];
+    L.push(cut(bold('▾ 工作树 · 多模型协作')));
+    L.push('');
+    stageKeys.forEach((k, i) => {
+      const role = cfg.roles?.[k];
+      const mid = role?.model;
+      const mm = mid ? cfg.models?.[mid] : null;
+      const modelId = mm ? mm.model : mid || '—';
+      let icon, col;
+      if (busy && i === curIdx) { icon = '●'; col = yellow; }
+      else if (stagesDone.has(k) && (i < curIdx || !busy)) { icon = '✓'; col = green; }
+      else { icon = '○'; col = grey; }
+      const branch = i === 0 ? '    ' : i === stageKeys.length - 1 ? '└─▶ ' : '├─▶ ';
+      L.push(cut(grey('  ' + branch)) + col(icon + ' ' + names[k]) + grey('  ' + modelId));
+      L.push(cut(grey(i === stageKeys.length - 1 ? '        ' : '  │     ') + col(desc[k])));
+    });
+    L.push('');
+    const nRoles = Object.keys(cfg.roles || {}).length;
+    const nModels = new Set(Object.values(cfg.roles || {}).map((r) => r.model)).size;
+    if (busy) L.push(cut(yellow('  ● 进行中 · ') + grey('阶段 ' + Math.max(1, curIdx + 1) + '/' + stageKeys.length)));
+    else if (stageCurKey) L.push(cut(green('  ✓ 流程完成') + grey(' · ' + nModels + ' 个模型协作')));
+    else L.push(cut(grey('  待命 · 输入任务后按此流程协作')));
+    L.push(cut(grey('  ' + nRoles + ' 个岗位 · ' + nModels + ' 个模型 · ' + tokens + ' tokens')));
+    while (L.length < H) L.push('');
+    return L.slice(0, H);
+  }
+
   // Codex 极简欢迎屏：左上标题 + 居中暗色标志 + 底部输入行 + 状态行
   function welcomeLines(W, H) {
     const magenta = (s) => (IS_TTY ? '\x1b[35m' + s + '\x1b[0m' : String(s));
@@ -305,9 +352,10 @@ async function runInteractive(baseCfg, flags, plugins) {
     const r0 = role ? cfg.roles[role] : null;
     const m0 = r0 ? cfg.models[r0.model] : null;
     const modelId = chatModel ? (cfg.models[chatModel]?.model || chatModel) : (m0 ? m0.model : '未配置 · 先运行 omniagent init');
-    const inText = line ? cutPlain(line, Math.max(10, W - 4)) + '█' : grey('Ask OmniAgent to do anything');
+    const typed = line ? cutPlain(line, Math.max(10, W - 8)) : '';
+    const padN = Math.max(0, (W - 2) - 4 - vlen(typed) - (typed ? 0 : INPUT_PH.length));
     const bottom = [
-      '❯ ' + inText,
+      barBg(' ❯ ' + (typed || fgDim(INPUT_PH)) + ' '.repeat(padN)),
       (mock ? yellow('mock') : cyan(modelId)) + grey(' · ' + process.cwd()),
       grey('tab for agents · ? for shortcuts'),
     ];
@@ -353,7 +401,9 @@ async function runInteractive(baseCfg, flags, plugins) {
       });
     }
 
-    const inputRow = '❯ ' + (line ? cutPlain(line, MW - 5) : grey('Ask OmniAgent to do anything')) + '█';
+    const typedC = line ? cutPlain(line, Math.max(8, MW - 8)) : '';
+    const padC = Math.max(0, MW - 4 - vlen(typedC) - (typedC ? 0 : INPUT_PH.length));
+    const inputRow = barBg(' ❯ ' + (typedC || fgDim(INPUT_PH)) + ' '.repeat(padC));
     const role = currentRole();
     const r = role ? cfg.roles[role] : null;
     const m = r ? cfg.models[r.model] : null;
@@ -384,19 +434,16 @@ async function runInteractive(baseCfg, flags, plugins) {
     main.splice(0, Math.max(0, main.length - showN));
     main.push(...popRows, inputRow, agRow, hintRow);
 
-    // ---- 右栏：模型回复 ----
-    right = [];
-    for (const t of replies) {
-      if (t === '\n') { right.push(''); continue; }
-      for (const l of vwrap(t.replace(/\n/g, ''), RW)) right.push(l);
-    }
-    while (right.length < showN) right.push('');
-    right.splice(0, Math.max(0, right.length - showN));
-    for (let i = 0; i < fixedRows; i++) right.push('');
+    // ---- 右栏：工作树（多模型协作流水线实时进度）----
+    right = workTreeLines(H, RW);
     }
 
-    // 欢迎屏：全屏单栏直接输出
-    if (!started) { out('\x1b[H\x1b[2J' + main.join('\n') + '\n'); return; }
+    // 欢迎屏：全屏单栏直接输出；光标定位到输入行内（第 H-2 行，「 ❯ 」后）
+    if (!started) {
+      const typedW = line ? cutPlain(line, Math.max(10, W - 8)) : '';
+      out('\x1b[H\x1b[2J' + main.join('\n') + '\n' + `\x1b[${H - 2};${4 + vlen(typedW)}H`);
+      return;
+    }
 
     // ---- 对话布局：左栏对话 + 右栏回复，标志作整屏水印背景 ----
     const bg = Array(H).fill('');
@@ -416,7 +463,9 @@ async function runInteractive(baseCfg, flags, plugins) {
       const br = r ? '' : bg[i].slice(MW + 3).padEnd(RW);
       rows.push((l ? vpad(l, MW) : grey(bl)) + grey(' │ ') + (r ? vpad(r, RW) : grey(br)));
     }
-    out('\x1b[H\x1b[2J' + rows.join('\n') + '\n');
+    // 光标定位回输入行内（main 倒数第 3 行 = inputRow，「 ❯ 」后）
+    const typedO = line ? cutPlain(line, Math.max(8, MW - 8)) : '';
+    out('\x1b[H\x1b[2J' + rows.join('\n') + '\n' + `\x1b[${Math.max(1, main.length - 2)};${4 + vlen(typedO)}H`);
   }
 
   function missingKeys() {
@@ -477,7 +526,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     if (bad.length) { push(yellow('以下模型缺少有效密钥：' + bad.join(', ')) + grey('（输入 /mock 体验演示，或去配置页填 key）')); render(); return; }
     let runCfg = cfg;
     if (chatModel) { runCfg = structuredClone(cfg); for (const rr of Object.values(runCfg.roles)) rr.model = chatModel; }
-    busy = true; interrupted = false; tokens = 0;
+    busy = true; interrupted = false; tokens = 0; stageCurKey = null; stagesDone.clear();
     render();
     (async () => {
       try {
