@@ -3,7 +3,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { Writable } from 'node:stream';
 import { OMNI_DIR, PLUGIN_DIR, CONFIG_PATH, RUNS_DIR, configExists, loadConfig, saveConfig, ensureDirs } from '../src/config.js';
 import { PRESETS, buildConfigFromPreset, listPresets } from '../src/presets.js';
 import { loadPlugins } from '../src/plugins/index.js';
@@ -45,21 +44,33 @@ OmniAgent —— 多模型协作智能体开发工具
   node bin/omni.js run "调研 RAG 的主流方案" --preset research
 `;
 
-// ---- 问卷式输入辅助（全部基于 readline，粘贴/中文/退格均可靠）----
-const MUTE_OUT = new Writable({ write(_c, _e, cb) { cb(); } }); // 吞掉回显，用于密钥输入
+// ---- 问卷式输入辅助（单一持久 readline；line 事件队列保证管道/粘贴多行也不丢输入）----
+let _rl = null;
+const _queued = [];
+let _askWaiter = null;
+function getRl() {
+  if (!_rl) {
+    _rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    _rl.on('line', (l) => {
+      if (_askWaiter) { const r = _askWaiter; _askWaiter = null; r(l); }
+      else _queued.push(l);
+    });
+    _rl.on('close', () => { if (_askWaiter) { const r = _askWaiter; _askWaiter = null; r(''); } });
+  }
+  return _rl;
+}
+function closeRl() { if (_rl) { try { _rl.close(); } catch {} _rl = null; } }
 
-// 询问一题；no/total 显示 [1/4] 编号；secret=true 不回显
-function askQ(no, total, q, { def = '', secret = false } = {}) {
+// 询问一题；no/total 显示 [n/4] 编号；直接回车 = 使用默认值
+function askQ(no, total, q, { def = '' } = {}) {
   return new Promise((res) => {
     const prefix = total ? '[' + no + '/' + total + '] ' : '';
     const suffix = def ? ' (' + def + ')' : '';
-    process.stdout.write(prefix + q + suffix + (secret ? '（输入不回显）' : '') + ': ');
-    const rl = readline.createInterface({ input: process.stdin, output: secret ? MUTE_OUT : process.stdout, terminal: true });
-    rl.question('', (a) => {
-      rl.close();
-      if (secret) process.stdout.write('(已录入)\n');
-      res(a.trim() || def);
-    });
+    const early = _queued.shift();
+    if (early !== undefined) { res(early.trim() || def); return; }
+    process.stdout.write(prefix + q + suffix + ': ');
+    _askWaiter = (l) => res(l.trim() || def);
+    getRl();
   });
 }
 
@@ -282,43 +293,36 @@ async function runInteractive(baseCfg, flags, plugins) {
     return L.slice(0, H);
   }
 
-  // OpenCode 风格欢迎屏：居中大标志 + 带边框输入框 + 模型行 + 提示（全屏，无侧栏）
+  // Codex 极简欢迎屏：左上标题 + 居中暗色标志 + 底部输入行 + 状态行
   function welcomeLines(W, H) {
+    const magenta = (s) => (IS_TTY ? '\x1b[35m' + s + '\x1b[0m' : String(s));
+    const head = [
+      bold('>⌒ OmniAgent') + grey(' (v' + VERSION + ')'),
+      grey('  ' + process.cwd()),
+      grey('  permissions: ') + magenta('YOLO mode'),
+    ];
     const role = currentRole();
     const r0 = role ? cfg.roles[role] : null;
     const m0 = r0 ? cfg.models[r0.model] : null;
-    const agentName = chatModel ? grey('统一模型') : (r0 ? cyan(r0.name || role) : yellow('未配置岗位'));
-    const modelId = chatModel ? (cfg.models[chatModel]?.model || chatModel) : (m0 ? m0.model : '运行 omniagent init 配置模型');
-    const BW = Math.min(64, Math.max(40, W - 8));
-    const inText = line ? cutPlain(line + '█', BW - 4) : grey('Ask anything…  ') + grey('“输入任务，回车开始”');
-    const box = [
-      '┌' + '─'.repeat(BW - 2) + '┐',
-      '│ ' + vpad(inText, BW - 4) + ' │',
-      '│ ' + vpad(agentName + (modelId ? grey('  ·  ') + modelId : ''), BW - 4) + ' │',
-      '└' + '─'.repeat(BW - 2) + '┘',
+    const modelId = chatModel ? (cfg.models[chatModel]?.model || chatModel) : (m0 ? m0.model : '未配置 · 先运行 omniagent init');
+    const inText = line ? cutPlain(line, Math.max(10, W - 4)) + '█' : grey('Ask OmniAgent to do anything');
+    const bottom = [
+      '❯ ' + inText,
+      (mock ? yellow('mock') : cyan(modelId)) + grey(' · ' + process.cwd()),
+      grey('tab for agents · ? for shortcuts'),
     ];
-    const hints = grey('tab agents   ctrl+p commands');
-    const tip = yellow('● Tip ') + grey('运行 /help 查看全部命令 · /mock 免密钥体验');
     const m = [];
-    const used = LOGO_LINES.length + 1 + box.length + 2 + 2 + 2;
-    const pad = Math.max(1, Math.floor((H - used - 2) / 2));
-    for (let i = 0; i < pad; i++) m.push('');
+    m.push(...head);
+    const mid = H - head.length - bottom.length - 1;
+    const padTop = Math.max(1, Math.floor((mid - LOGO_LINES.length) / 2));
+    for (let i = 0; i < padTop; i++) m.push('');
     for (const l of LOGO_LINES) {
-      const w = vlen(l);
-      const p = Math.max(0, Math.floor((W - w) / 2));
-      m.push(' '.repeat(p) + grey(l));
+      const p = Math.max(0, Math.floor((W - vlen(l)) / 2));
+      m.push(' '.repeat(p) + dim(l));
     }
+    while (m.length < H - bottom.length - 1) m.push('');
     m.push('');
-    const bx = Math.max(0, Math.floor((W - BW) / 2));
-    for (const bl of box) m.push(' '.repeat(bx) + bl);
-    m.push('');
-    m.push(' '.repeat(Math.max(0, W - vlen(hints) - bx - 2)) + hints);
-    m.push('');
-    m.push(' '.repeat(Math.max(0, Math.floor((W - vlen(tip)) / 2))) + tip);
-    while (m.length < H - 1) m.push('');
-    const cwd = grey(' ' + process.cwd());
-    const ver = grey('OmniAgent v' + VERSION + ' ');
-    m.push(cwd + ' '.repeat(Math.max(1, W - vlen(cwd) - vlen(ver))) + ver);
+    m.push(...bottom);
     return m.slice(0, H);
   }
 
@@ -349,18 +353,17 @@ async function runInteractive(baseCfg, flags, plugins) {
       });
     }
 
-    const inputRow = (line ? cutPlain(line, MW - 3) : grey('Ask anything…')) + '█';
+    const inputRow = '❯ ' + (line ? cutPlain(line, MW - 5) : grey('Ask OmniAgent to do anything')) + '█';
     const role = currentRole();
     const r = role ? cfg.roles[role] : null;
     const m = r ? cfg.models[r.model] : null;
-    const agName = chatModel
-        ? bold(cyan('◆ 统一模型 · ' + (cfg.models[chatModel]?.model || chatModel)))
+    const agRow = (chatModel
+        ? cyan(cfg.models[chatModel]?.model || chatModel)
         : role
-        ? bold(cyan(role)) + grey(' — ' + (r?.name || '')) + grey('  ·  ' + (m ? m.model : ''))
-        : yellow('⚠ 未配置岗位');
-    const agRow = agName + (mock ? yellow('  mock') : '');
+        ? cyan(m ? m.model : role)
+        : yellow('未配置模型 · 先运行 omniagent init')) + grey(' · ' + process.cwd()) + (mock ? yellow(' · mock') : '');
     const hintL = busy ? grey('·········') + ' esc interrupt' : '';
-    const hintR = 'tab agents   ctrl+p commands';
+    const hintR = 'tab for agents · ? for shortcuts';
     const hintPad = Math.max(1, MW - vlen(hintL) - vlen(hintR) - 2);
     const hintRow = hintL + ' '.repeat(hintPad) + hintR;
 
@@ -615,7 +618,7 @@ async function main() {
       ui.info('请依次回答以下问题（直接回车 = 使用括号中的默认值）：');
       console.log('');
       const base = await askQ(1, 4, 'API base_url', { def: 'https://api.openai.com/v1' });
-      const key = await askQ(2, 4, 'API key', { secret: true });
+      const key = await askQ(2, 4, 'API key（明文显示，仅保存在本机）');
       const model = await askQ(3, 4, '模型名', { def: 'gpt-4o-mini' });
       console.log('');
       ui.info('—— 请确认 ——');
@@ -625,7 +628,7 @@ async function main() {
       console.log('');
       const okc = await askQ(4, 4, '确认写入以上配置？', { def: 'Y' });
       console.log('');
-      if (!/^y(es)?$/i.test(okc.trim())) { ui.warn('已取消，未写入任何配置。'); return; }
+      if (!/^y(es)?$/i.test(okc.trim())) { closeRl(); ui.warn('已取消，未写入任何配置。'); return; }
       if (!key) ui.warn('API key 为空：界面可进入但调用模型会失败，可先 /mock 体验演示模式，或重跑 init 补填。');
       for (const m of Object.values(cfg.models)) { m.base_url = base; m.api_key = key; m.model = model; }
       saveConfig(cfg);
@@ -635,6 +638,7 @@ async function main() {
       ui.ok(`已生成配置（预设 ${name}）→ ${CONFIG_PATH}`);
       ui.info('请将 models.*.api_key 替换为你的密钥，或在终端中重跑 omniagent init 交互式填写。');
     }
+    closeRl();
     ui.ok('初始化完成 ✓  直接运行  omniagent  即可进入界面（无需任何参数）。');
     return;
   }

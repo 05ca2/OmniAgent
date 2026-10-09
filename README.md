@@ -7,7 +7,7 @@
 指挥 Director → 规划 Planner → 多岗位 Workers（并行）→ 检验 Verifier（不通过则补做）
 ```
 
-- **终端优先**：OpenCode 风格 TUI —— 居中大标志欢迎屏，输入指令后切换为「左栏对话 / 右栏回复」双栏布局，标志作背景水印。
+- **终端优先**：Codex 风格极简 TUI —— 左上标题栏 + 居中暗色标志欢迎屏，输入指令后切换为「左栏对话 / 右栏回复」双栏布局，标志作背景水印。
 - **本地 Web 应用**：`serve` 后在浏览器打开 `http://localhost:3000`，可视化看每个岗位的思考与工具调用。
 - **官方官网**：`site` 启动 `http://localhost:8080`，含插件中心与反馈。
 - 纯 Node.js（**零第三方依赖**），不会卡在 `npm install`。
@@ -39,14 +39,11 @@ npm install -g .
 omniagent init
 ```
 
-会**以问卷形式一题一题问你**（直接回车 = 使用括号中的默认值；密钥输入不回显）：
+会**以问卷形式一题一题问你**（直接回车 = 使用括号中的默认值；输入内容明文可见，仅保存在本机）：
 
 ```
-◆ 初始化 OmniAgent（预设 full）
-请依次回答以下问题（直接回车 = 使用括号中的默认值）：
-
 [1/4] API base_url (https://api.openai.com/v1): http://token.sensenova.cn/v1
-[2/4] API key（输入不回显）: (已录入)
+[2/4] API key（明文显示，仅保存在本机）: sk-xxxx
 [3/4] 模型名 (gpt-4o-mini): deepseek-chat
 
 —— 请确认 ——
@@ -88,19 +85,19 @@ npm install -g .
 
 ## 🖥️ 界面导览
 
-**启动画面**（输入指令前）：居中大标志 + 带边框输入框 + 当前岗位/模型状态行 + 快捷键提示：
+**启动画面**（输入指令前，Codex 风格极简布局）：左上标题栏 + 居中暗色标志 + 底部输入行与状态行：
 
 ```
-                    ██ OmniAgent 标志 ██
+>⌒ OmniAgent (v0.2.0)
+  D:\新建文件夹\openrelay
+  permissions: YOLO mode
 
-            ┌──────────────────────────────────────┐
-            │ Ask anything…  "输入任务，回车开始"      │
-            │ 岗位名称  ·  模型 ID                    │
-            └──────────────────────────────────────┘
-                        tab agents   ctrl+p commands
+                ·⡀  ⢀⡀  ⢀⡀
+              （OmniAgent 标志 · 暗色点阵）
 
-                  ● Tip 运行 /help 查看全部命令
-
+❯ Ask OmniAgent to do anything
+deepseek-chat · D:\新建文件夹\openrelay
+tab for agents · ? for shortcuts
 ```
 
 **输入指令后**：自动切换为双栏布局 —— **左栏**是对话（你的指令 / 流水线阶段 / 工具调用），
