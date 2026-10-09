@@ -340,6 +340,13 @@ async function runInteractive(baseCfg, flags, plugins) {
     return L.slice(0, H);
   }
 
+  // 主区左上角品牌标识（单行）：OmniAgent 名称 + 版本 + 模式
+  function brandLine(MW) {
+    const tag = mock ? yellow('  [演示模式]') : '';
+    const s = bold('>⌒ OmniAgent') + grey(' v' + VERSION) + grey(' · 多模型协作') + tag;
+    return cutPlain(s, MW);
+  }
+
   // Codex 极简欢迎屏：左上标题 + 居中暗色标志 + 底部输入行 + 状态行
   function welcomeLines(W, H) {
     const magenta = (s) => (IS_TTY ? '\x1b[35m' + s + '\x1b[0m' : String(s));
@@ -377,7 +384,7 @@ async function runInteractive(baseCfg, flags, plugins) {
   function render() {
     const W = process.stdout.columns || 100;
     const H = Math.max(12, (process.stdout.rows || 30) - 1);
-    const MW = Math.max(40, Math.floor(W * 0.55));
+    const MW = Math.max(40, Math.floor(W * 0.68));
     const RW = Math.max(10, W - MW - 3);
 
     let main, right;
@@ -386,6 +393,7 @@ async function runInteractive(baseCfg, flags, plugins) {
       right = [];
     } else {
     // ---- 主区 ----
+    const brand = brandLine(MW);
     const pop = popupEntries();
     let popRows = [];
     if (pop) {
@@ -417,7 +425,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     const hintPad = Math.max(1, MW - vlen(hintL) - vlen(hintR) - 2);
     const hintRow = hintL + ' '.repeat(hintPad) + hintR;
 
-    const fixedRows = 1 + popRows.length + 1 + 1 + 1; // input+popup+agent+hints
+    const fixedRows = 1 + 1 + popRows.length + 1 + 1; // brand+input+popup+agent+hints
     const showN = Math.max(1, H - fixedRows);
     const head = transcript.length > showN ? grey('… （上方还有 ' + (transcript.length - showN) + ' 行）') : '';
     const body = transcript.slice(-showN);
@@ -432,6 +440,7 @@ async function runInteractive(baseCfg, flags, plugins) {
 
     while (main.length < showN) main.push('');
     main.splice(0, Math.max(0, main.length - showN));
+    main.unshift(brand);
     main.push(...popRows, inputRow, agRow, hintRow);
 
     // ---- 右栏：工作树（多模型协作流水线实时进度）----
