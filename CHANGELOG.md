@@ -65,8 +65,8 @@ MIT License
 
 ### 下载
 
-从 [Releases](https://github.com/05ca2/OmniAgent/releases) 下载源码或直接克隆：
+从 [Releases](https://github.com/05ca2/ORcode/releases) 下载源码或直接克隆：
 
 ```bash
-git clone https://github.com/05ca2/OmniAgent.git
+git clone https://github.com/05ca2/ORcode.git
 ```

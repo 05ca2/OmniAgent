@@ -22,8 +22,8 @@
 ### 1. 下载
 
 ```bash
-git clone https://github.com/05ca2/OmniAgent.git
-cd OmniAgent
+git clone https://github.com/05ca2/ORcode.git
+cd ORcode
 ```
 
 > 不用 git 的话，在 GitHub 页面点 **Code → Download ZIP** 解压即可。
@@ -83,7 +83,7 @@ orcode
 ### 升级
 
 ```bash
-cd OmniAgent
+cd ORcode
 git pull
 npm install -g .
 ```

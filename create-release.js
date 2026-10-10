@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Create a GitHub Release for OmniAgent
+ * Create a GitHub Release for ORcode
  * Usage: node create-release.js
  */
 
@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 
 // 配置
 const OWNER = '05ca2';
-const REPO = 'OmniAgent';
+const REPO = 'ORcode';
 const VERSION = '1.0.0';
 const TAG_NAME = `v${VERSION}`;
 const EXISTS_TAG = false;
@@ -36,7 +36,7 @@ function getChangelogBody() {
     return changelog.slice(0, 1000);
   } catch (err) {
     console.error('读取 CHANGELOG 失败:', err.message);
-    return `OmniAgent ${VERSION} - 首个 Alpha 版本`;
+    return `ORcode ${VERSION} - 首个 Alpha 版本`;
   }
 }
 
@@ -47,13 +47,13 @@ async function createRelease() {
   const headers = {
     'Authorization': `token ${process.env.GITHUB_TOKEN || ''}`,
     'Accept': 'application/vnd.github.v3+json',
-    'User-Agent': 'OmniAgent-Release-Script',
+    'User-Agent': 'ORcode-Release-Script',
   };
 
   const body = {
     tag_name: TAG_NAME,
     target_commitish: 'master',  // 使用 master 分支
-    name: `OmniAgent ${VERSION}`,
+    name: `ORcode ${VERSION}`,
     body: getChangelogBody(),
     draft: false,
     prerelease: true  // 标为预览版
