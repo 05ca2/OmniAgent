@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-badge-512.png" alt="ORcode" width="180" height="180" />
+  <img src="assets/wordmark.svg" alt="ORCODE" width="420" height="75" />
 </p>
 
 # ORcode · 多模型协作智能体开发工具
@@ -123,9 +123,9 @@ deepseek-chat · D:\新建文件夹\openrelay
 tab for agents · ? for shortcuts
 ```
 
-标志源文件：[`assets/logo-badge-512.png`](assets/logo-badge-512.png)（README 顶部展示，保留圆形底）与
-[`assets/logo-white-512.png`](assets/logo-white-512.png)（网页版与终端用，透明底）。
-TUI 背景水印由该图转成盲文点阵（2×4 点/字符）；官网统一用文字标识，网页版用图像标志。
+标识资源：
+- [`assets/wordmark.svg`](assets/wordmark.svg) —— **ORCODE 像素字标**（700×125），官网与本 README 顶部使用，由 `tools/gen-wordmark.mjs` 从命令行同一套5×5 字形表生成（圆角像素块 + ORC 深灰 / ODE 浅灰 + 底部立体暗带 + 基线圆点）；
+- [`assets/logo-badge-512.png`](assets/logo-badge-512.png) / [`assets/logo-white-512.png`](assets/logo-white-512.png) —— 螺旋星芒图像标志（保留圆形底 / 透明底），网页版与 TUI 背景水印使用（后者转成盲文点阵，2×4 点/字符）。
 
 **输入指令后**：切换到双栏布局——**左栏**是对话流（左上角常驻品牌标志，不随滚动移动），
 **右栏**是工作树 / 子会话列表 / 设置入口。
