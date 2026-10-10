@@ -132,47 +132,13 @@ const barBg = (s) => (IS_TTY ? `\x1b[48;5;236m${s}\x1b[0m` : String(s));
 const fgDim = (s) => (IS_TTY ? `\x1b[90m${s}\x1b[39m` : String(s));
 const INPUT_PH = 'Ask ORcode to do anything';
 
-// ---------- opencode 风格像素 Logo ----------
-const GLYPHS = {
-  O: ['.###.', '#...#', '#...#', '#...#', '.###.'],
-  M: ['#...#', '##.##', '#.#.#', '#...#', '#...#'],
-  N: ['#...#', '##..#', '#.#.#', '#..##', '#...#'],
-  I: ['###', '.#.', '.#.', '.#.', '###'],
-  A: ['.###.', '#...#', '#####', '#...#', '#...#'],
-  G: ['.####', '#....', '#..##', '#...#', '.###.'],
-  E: ['#####', '#....', '####.', '#....', '#####'],
-  T: ['#####', '..#..', '..#..', '..#..', '..#..'],
-  R: ['####.', '#...#', '####.', '#.#..', '#..#.'],
-  C: ['.###.', '#...#', '#....', '#...#', '.###.'],
-};
-const BRAND = 'ORCODE'; // 品牌名（大字标识 / 界面文案）
-// ---------- 背景盲文标志：ORCODE 字标（由 tools/logo-gen.mjs 生成，70 列 x 4 行） ----------
-const LOGO_ART = "⣀⣀⠿⠿⠿⠿⠿⠿⣀⣀  ⣿⣿⠿⠿⠿⠿⠿⠿⣀⣀  ⣀⣀⠿⠿⠿⠿⠿⠿⣀⣀  ⣀⣀⠿⠿⠿⠿⠿⠿⣀⣀  ⣿⣿⠿⠿⠿⠿⠿⠿⣀⣀  ⣿⣿⠿⠿⠿⠿⠿⠿⠿⠿\n⣿⣿      ⣿⣿  ⣿⣿⣤⣤⣤⣤⣤⣤⠛⠛  ⣿⣿      ⠛⠛  ⣿⣿      ⣿⣿  ⣿⣿      ⣿⣿  ⣿⣿⣤⣤⣤⣤⣤⣤\n⣿⣿      ⣿⣿  ⣿⣿⠉⠉⣿⣿⠉⠉    ⣿⣿      ⣶⣶  ⣿⣿      ⣿⣿  ⣿⣿      ⣿⣿  ⣿⣿⠉⠉⠉⠉⠉⠉\n  ⠿⠿⠿⠿⠿⠿    ⠿⠿    ⠿⠿      ⠿⠿⠿⠿⠿⠿      ⠿⠿⠿⠿⠿⠿    ⠿⠿⠿⠿⠿⠿⠿⠿    ⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿";
+const BRAND = 'ORCODE'; // 品牌名（界面文案）
+// ---------- 背景盲文标志：由 assets/logo-white-512.png 转点阵（螺旋星芒，40 列 x 20 行） ----------
+const LOGO_ART = "             ⡀\n            ⣸⣿⣶⣄\n           ⢠⣿⣿⣿⣿⣷⣦⡀        ⣀⣀⣤⣤⣴⣶\n          ⢀⣿⣿⣿⡿⠟⠛⠿⣿⣶⣤⣤⣴⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿\n          ⣼⣿⡟⠁    ⠈⠙⢿⣿⣍⠉⠉⠉⠉⠻⢿⣿⣿⣿⣿\n         ⢰⣿⠟ ⣀⣀⣠⣤⣤⣤⣤⣀⣈⡻⢷⣄    ⠉⢻⣿⡇\n      ⢀⣤⣶⣿⣿⡿⠿⢛⣿⠟⣛⣫⡭⠿⡺⠯⣭⣛⠻⠷⣄   ⢸⣿⡇\n   ⣀⣤⣾⣿⠿⠛⠋⠁ ⣠⡿⣡⡞⣋⣥⣶⣿⣿⣿⣦⣭⡛⢷⡘⣧  ⣼⣿⣷⡀\n⣠⣴⣿⣿⣿⣿⡟    ⣴⣿⢞⡿⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⡌⢷⢹⣇ ⣿⡟⠹⣿⣦⡀\n ⠙⢿⣿⣿⣿⡇   ⣼⣿⠏⡾⣡⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡜⣧⢻⣴⡿⠁ ⠹⣿⣷⣄\n   ⠙⢿⣿⣧  ⣸⡟⢿⡀⢿⡸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢣⡟⢠⣿⠃   ⣹⣿⣿⣧⡀\n     ⠙⢿⣷⣰⣿⡇⠈⣷⡘⣧⢹⣿⣿⣿⣿⣿⣿⣿⣿⣿⢇⣾⢡⡿⠃   ⢠⣿⣿⣿⣿⣿⣆\n       ⢹⣿⣿  ⠘⣷⡙⠦⣍⡛⠿⣿⣿⣿⠿⣛⣭⠾⣳⡟⠁  ⣀⣠⣾⣿⣿⡿⠿⠛⠉\n       ⢸⣿⡿   ⠘⢷⣤⣌⣙⡳⢮⣭⠶⠛⢋⣁⣼⣫⣤⣶⣶⣿⣿⡿⠟⠋⠉\n       ⢸⣿⣧⡀    ⠹⣿⣭⡉⠛⠛⠛⠛⠛⠛⠛⠉⠉⢡⣾⡏\n       ⣼⣿⣿⣿⣷⣦⣄⣀⣀⣈⣻⣿⣦⣀      ⣠⣿⣿⠁\n    ⠠⡀ ⣿⣿⣿⣿⣿⣿⣿⡿⠿⠿⠛⠛⠿⣿⣷⣄⡀⣀⣴⣾⣿⣿⠇     ⡀\n     ⠈⠢⡿⠛⠛⠋⠉⠁       ⠈⠻⢿⣿⣿⣿⣿⣿⡏    ⠠⠊\n       ⠈  ⡀            ⠉⠻⣿⣿⡿\n            ⠂⠄ ⡀         ⠈⠙⠃";
 const LOGO_LINES = LOGO_ART.split('\n').filter((l) => l.trim());
 
-function pixelLogo(word) {
-  const rows = ['', '', '', '', ''];
-  word.split('').forEach((ch, i) => {
-    const g = GLYPHS[ch] || GLYPHS.O;
-    const paint = i < 4 ? grey : bold; // 前半段灰、后半段亮，仿 opencode 双色调
-    for (let r = 0; r < 5; r++) rows[r] += paint(g[r].replace(/#/g, '█').replace(/\./g, ' ')) + ' ';
-  });
-  return rows.join('\n');
-}
-
-// 大字 ORCODE 标识：像素字形完整 5 行渲染（前半段灰 / 后半段亮，仿 opencode 双色调）
-// 注：不要用 ▀▄ 半块压缩成 3 行——5 行字形两两压缩会让上下弧线错位、末行丢失，字形变形。
-function bigLogoLines() {
-  const rows = ['', '', '', '', ''];
-  const half = Math.ceil(BRAND.length / 2);
-  BRAND.split('').forEach((ch, i) => {
-    const g = GLYPHS[ch] || GLYPHS.O;
-    const paint = i < half ? grey : bold;
-    for (let r = 0; r < 5; r++) rows[r] += paint(g[r].replace(/#/g, '█')) + ' ';
-  });
-  return rows.map((r) => r.replace(/\s+$/, ''));
-}
-const BIG_LOGO = bigLogoLines(); // 宽 = BRAND.length * 6 - 1 列
+// 左上角品牌标记：由 assets/logo-white-512.png 转盲文点阵（螺旋星芒，26 列 x 13 行）
+const BIG_LOGO = "        ⣠⡀\n       ⢠⣿⣿⣶⣄      ⣀⣀⣤⡄\n       ⣾⡿⠟⠉⠛⢿⣶⡶⠾⠿⢿⣿⣿⣿⡇\n      ⣸⡟⣀⣀⣀⣀⣀⣉⣻⣦⡀ ⠈⠛⣿⡇\n   ⣀⣴⣾⠿⠛⢩⣟⣭⢽⣺⣭⣺⠭⣛⢦  ⣿⡁\n⢠⣴⣿⣿⡏  ⣰⡿⡿⣼⣿⣿⣿⣿⣿⣞⣎⣇⢸⡟⢻⣦\n ⠙⢿⣿⡀ ⣰⢟⢸⢹⣿⣿⣿⣿⣿⣿⣿⢼⠜⡾⠁ ⢻⣷⡄\n   ⠙⢿⣤⡿⠘⣎⢧⢿⣿⣿⣿⣿⣿⢏⣞⡼⠁  ⣾⣿⣿⣦\n     ⣿⡇ ⠘⢎⡓⠯⣟⣟⡯⠗⢪⢟⣀⣤⣴⣾⠿⠛⠉\n     ⣿⣧⡀ ⠈⠻⣭⡛⠛⠒⠛⠛⠋⢩⣿⠉\n     ⣿⣿⣿⣷⣶⡶⠾⢿⣦⣄ ⣀⣴⣿⠃\n    ⠘⠛⠋⠉⠉    ⠉⠻⣿⣿⣿⡟\n         ⡀      ⠙⠿".split('\n'); // 26 列 x 13 行
 
 const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version || '0.2.0'; } catch { return '0.2.0'; } })();
 
@@ -643,8 +609,8 @@ async function runInteractive(baseCfg, flags, plugins) {
     const hintRow = hintL + ' '.repeat(hintPad) + hintR;
 
     // 左上角大字标识：ORCODE 像素字（3 行，ORC 灰 / ODE 亮白）；窄终端退化为单行
-    const logoW = BIG_LOGO[0].length; // █ 属窄字符，按字符数估算即可
-    const logoRows = MW >= Math.min(54, logoW + 2) ? BIG_LOGO : [brandLine(MW)];
+    const logoW = BIG_LOGO[0].length; // 盲文/ASCII 属窄字符，按字符数估算即可
+    const logoRows = MW >= Math.min(54, logoW + 2) ? BIG_LOGO : [brandLine(MW)]; // 窄终端退化为单行文字品牌
     const logoN = logoRows.length + 1; // +1 空行
 
     // 把全部会话记录折叠成显示行，再按 scrollOffset 取尾部窗口（滚轮/↑↓ 翻历史）

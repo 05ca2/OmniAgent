@@ -37,8 +37,8 @@ body {
   overflow: auto;
 }
 .brand { display: flex; align-items: center; gap: 9px; padding: 0 6px; }
-/* 像素字标：等比缩放到侧栏高度（保持 222x42 比例 → 约 111x21） */
-.logo { width: 111px; height: 21px; display: block; }
+/* 标志为 1:1 圆形徽章（512x512），按侧栏高度缩放 */
+.logo { width: 26px; height: 26px; display: block; }
 .brand-name { font-weight: 600; font-size: 16px; letter-spacing: .2px; }
 .brand-badge {
   font-size: 9px; padding: 2px 5px; border-radius: 4px; letter-spacing: .5px;
