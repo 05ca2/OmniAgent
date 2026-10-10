@@ -231,6 +231,9 @@ const vwrap = (s, w) => { // 纯文本按显示宽度折叠成多行
   return lines.length ? lines : [''];
 };
 
+// 错误消息按显示宽度折叠，并给每行加左缩进（配合「━━ 请求失败 ━━」块使用）
+const wrapErr = (s, w) => vwrap(String(s).replace(/\s+/g, ' ').trim(), Math.max(30, w || 60));
+
 // 从 base_url 反推供应商显示名（仅在配置里没写 provider 时兜底）
 function guessProvider(url) {
   const u = String(url || '').toLowerCase();
@@ -566,8 +569,8 @@ async function runInteractive(baseCfg, flags, plugins) {
       }
     }
     while (L.length < H) L.push('');
-    // 右下角设置入口：点击打开「添加模型」向导
-    const setLabel = '⚙ 设置·添加模型';
+    // 右下角设置入口：点击打开设置页（首项即「＋ 添加模型」）
+    const setLabel = '⚙ 设置';
     const setPad = Math.max(0, w - vlen(setLabel));
     clickZones.push({ x1: MW + 4 + setPad, y1: H, y2: H, x2: 9999, act: { t: 'settings' } });
     L[H - 1] = cut(' '.repeat(setPad) + cyan(setLabel));
@@ -814,7 +817,8 @@ async function runInteractive(baseCfg, flags, plugins) {
       const top = Math.max(0, Math.floor((H - LOGO_LINES.length) / 2));
       LOGO_LINES.forEach((l, k) => {
         const w = vlen(l);
-        const p = Math.max(0, Math.floor((W - w) / 2));
+        // 在左栏宽度内居中（不能按全屏 W 居中，否则会被中间分割线切成两半）
+        const p = Math.max(0, Math.floor((MW - w) / 2));
         bg[top + k] = ' '.repeat(p) + l;
       });
     }
@@ -1078,7 +1082,12 @@ async function runInteractive(baseCfg, flags, plugins) {
         }
       } catch (e) {
         if (String(e?.message).includes('__INTERRUPT__')) push(yellow('⏹ 已中断（esc interrupt）'));
-        else push('\n' + red(String(e?.message || e)) + '\n');
+        else {
+          const w = Math.max(30, Math.floor((process.stdout.columns || 100) * 0.68) - 4);
+          push('\n' + red('━━ 请求失败 ━━') + grey(`  [${model.display || model.model}]`));
+          wrapErr(String(e?.message || e), w).forEach((l) => push('  ' + red(l)));
+          push('');
+        }
       }
       const wasInt = interrupted;
       busy = false; interrupted = false; streamBuf = ''; think = null;
@@ -1122,7 +1131,12 @@ async function runInteractive(baseCfg, flags, plugins) {
         push('');
       } catch (e) {
         if (String(e?.message).includes('__INTERRUPT__')) push(yellow('⏹ 已中断（esc interrupt）'));
-        else push('\n' + String(e?.message || e) + '\n');
+        else {
+          push('\n' + red('━━ 请求失败 ━━'));
+          wrapErr(String(e?.message || e), finW || 60).forEach((l) => push('  ' + red(l)));
+          push(grey('  提示：多模型并发时易触发限流（tpm/rpm），可 /settings 调低并发数；若是 Key 报错，点右下角「设置 · 添加模型」更新该模型密钥。'));
+          push('');
+        }
       }
       const wasInt = interrupted;
       busy = false; interrupted = false; streamBuf = ''; think = null;

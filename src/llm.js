@@ -1,6 +1,63 @@
 // OpenAI 兼容大模型客户端：支持流式输出 + tool calling，并内置 mock 模式
 // 兼容：OpenAI / DeepSeek / OpenRouter / Ollama / vLLM / 通义 / 智谱 / 月之暗面 等
 
+// 把各家 API 的错误体翻译成人话：优先读 error.message，其次解析嵌套结构，最后退回原文摘要
+export function friendlyError(status, statusText, rawText) {
+  const raw = String(rawText || '').trim();
+  let msg = '';
+  let code = '';
+  let type = '';
+  try {
+    const j = JSON.parse(raw);
+    const e = j.error || j;
+    msg = e.message || e.msg || e.detail || (typeof e === 'string' ? e : '');
+    code = e.code != null ? String(e.code) : (j.code != null ? String(j.code) : '');
+    type = e.type || j.type || '';
+    // 部分网关把错误包成 {errors:[...]}，或 message 本身还是对象
+    if (!msg && Array.isArray(j.errors) && j.errors.length) msg = j.errors[0]?.message || j.errors[0]?.detail || '';
+    if (!msg && e.message && typeof e.message === 'object') msg = e.message.error || '';
+  } catch { /* 非 JSON，走原文处理 */ }
+
+  const s = status || 0;
+  const hint = {
+    400: '请求格式或参数不被该接口接受',
+    401: 'API Key 无效或已过期 —— 请在设置里重新填写该模型的密钥',
+    403: '没有访问该模型的权限 —— 密钥所属账号未被授权，或模型名写错',
+    404: '接口地址或模型名不存在 —— 检查 base_url 是否完整（通常需含 /v1）与 model 拼写',
+    413: '请求内容过长 —— 上下文超出该模型限制',
+    422: '参数校验失败 —— 常见于 tool schema 不被该服务商支持',
+    429: '触发限流 —— 每分钟请求数或 token 数超限；多模型并发时尤其容易触发，可减少并发数或换额度更高的 Key',
+    500: '服务商内部错误 —— 可稍后重试',
+    502: '网关错误 —— 服务商暂时不可用，稍后重试',
+    503: '服务暂不可用 —— 模型过载或维护中，稍后重试',
+  }[s] || '';
+
+  // 关键词命中优先（比状态码更精准）
+  const low = `${msg} ${raw}`.toLowerCase();
+  let extra = '';
+  if (/invalid token|unauthorized|authentication_error|invalid api key|incorrect api key|invalid_api_key/.test(low)) {
+    extra = 'API Key 无效或已过期 —— 点右下角「设置」更新该模型的密钥';
+  } else if (/tpm\/rpm|rate_limit|too many requests|rate limit exceeded/.test(low)) {
+    extra = '触发限流 —— 每分钟请求数或 token 数超限；多模型并发时尤其容易触发，可 /settings 调低并发数或换额度更高的 Key';
+  } else if (/context length|maximum context|too many tokens|context_length_exceeded/.test(low)) {
+    extra = '上下文超长 —— 减少对话历史或把任务拆小';
+  } else if (/model_not_found|does not exist|model not found|no such model/.test(low)) {
+    extra = '该模型名在当前服务商下不存在 —— 检查 model 拼写';
+  } else if (/insufficient|quota|billing|余额|欠费|arrear/.test(low)) {
+    extra = '账户余额或额度不足';
+  }
+
+  const parts = [`HTTP ${s}${statusText ? ' ' + statusText : ''}`];
+  if (extra) parts.push(extra);
+  else if (hint) parts.push(hint);
+  if (msg && msg !== extra && msg.length <= 120) parts.push(msg);
+  else if (msg && msg.length > 120) parts.push(msg.slice(0, 120) + '…');
+  else if (!msg && raw && raw.length <= 160) parts.push(raw);
+  if (code && code !== String(s)) parts.push(`code=${code}`);
+  if (type && !extra) parts.push(`type=${type}`);
+  return parts.join(' · ');
+}
+
 export async function chatCompletion(model, messages, tools = [], opts = {}) {
   if (opts.mock || model.base_url === 'mock://') {
     return mockChat(model, messages, tools, opts);
@@ -24,7 +81,7 @@ export async function chatCompletion(model, messages, tools = [], opts = {}) {
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: opts.signal });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    throw new Error(`LLM 请求失败 ${res.status} ${res.statusText}: ${txt.slice(0, 600)}`);
+    throw new Error(friendlyError(res.status, res.statusText, txt));
   }
 
   if (!opts.stream) {
