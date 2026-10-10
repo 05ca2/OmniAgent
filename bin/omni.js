@@ -1171,7 +1171,7 @@ async function runInteractive(baseCfg, flags, plugins) {
         if (r && r.kind === 'model') pickerConfirm(r.id);
         return;
       }
-      if (key.name === 'backspace') { picker.q = (picker.q || '').slice(0, -1); picker.sel = pickerRows().findIndex((r) => r.kind === 'model'); if (picker.sel < 0) picker.sel = 0; render(); return; }
+      if (key.name === 'backspace' || key.name === 'delete') { picker.q = (picker.q || '').slice(0, -1); picker.sel = pickerRows().findIndex((r) => r.kind === 'model'); if (picker.sel < 0) picker.sel = 0; render(); return; }
       if (str && !key.ctrl && !key.meta) {
         const clean = str.replace(/[\r\n]/g, '');
         if (clean) {
@@ -1206,7 +1206,7 @@ async function runInteractive(baseCfg, flags, plugins) {
         if (line.trim()) { pendingQueue.push(line.trim()); push(grey('✉ 已排队 ') + bold(line.trim())); line = ''; popupOpen = false; }
         render(); return;
       }
-      if (key.name === 'backspace') { line = [...line].slice(0, -1).join(''); render(); return; }
+      if (key.name === 'backspace' || key.name === 'delete') { line = [...line].slice(0, -1).join(''); render(); return; }
       if (str && !key.ctrl && !key.meta) { const clean = str.replace(/[\r\n]/g, ''); if (clean) { line += clean; render(); } }
       return;
     }
@@ -1240,7 +1240,7 @@ async function runInteractive(baseCfg, flags, plugins) {
       submit(line);
       return;
     }
-    if (key.name === 'backspace') { line = [...line].slice(0, -1).join(''); popupOpen = popupEntries() != null; if (popupOpen) popupSel = 0; render(); return; }
+    if (key.name === 'backspace' || key.name === 'delete') { line = [...line].slice(0, -1).join(''); popupOpen = popupEntries() != null; if (popupOpen) popupSel = 0; render(); return; }
     if (str && !key.ctrl && !key.meta) {
       const clean = str.replace(/[\r\n]/g, '');
       if (clean) {
@@ -1260,13 +1260,41 @@ async function runInteractive(baseCfg, flags, plugins) {
     kb += chunk.toString('utf8');
     processKb();
   }
+  // 键位映射：同时兼容 CSI（\x1b[A）、带修饰符（\x1b[1;5A）与 SS3/应用光键模式（\x1bOA）
+  const CSI_KEYS = { A: 'up', B: 'down', C: 'right', D: 'left', H: 'home', F: 'end' };
+  const TILDE_KEYS = { 1: 'home', 2: 'insert', 3: 'delete', 4: 'end', 5: 'pageup', 6: 'pagedown', 7: 'home', 8: 'end' };
   function processKb() {
     while (kb.length) {
       let m;
       // SGR 鼠标（ kitty/xterm ）: ESC [ < b ; col ; row M/m
       if ((m = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(kb))) { kb = kb.slice(m[0].length); onMouse(+m[2], +m[3], m[4] === 'M', +m[1]); continue; }
       if (kb.startsWith('\x1b[M')) { kb = kb.slice(6); continue; } // 传统 X10 鼠标：忽略
-      if ((m = /^\x1b\[([ABCD])/.exec(kb))) { kb = kb.slice(m[0].length); onKey('', { name: { A: 'up', B: 'down', C: 'right', D: 'left' }[m[1]] }); continue; }
+      // 方向/功能键：CSI 简单形 \x1b[A、带修饰符 \x1b[1;5A、波浪形 \x1b[3~
+      if ((m = /^\x1b\[(\d*)(?:;(\d+))?([A-Za-z~])/.exec(kb)) && (m[3] === '~' ? TILDE_KEYS[+m[1]] !== undefined : CSI_KEYS[m[3]] !== undefined)) {
+        kb = kb.slice(m[0].length);
+        const mod = m[2] ? +m[2] - 1 : 0; // 修饰位：1=shift 2=alt 4=ctrl
+        onKey('', { name: m[3] === '~' ? TILDE_KEYS[+m[1]] : CSI_KEYS[m[3]], ctrl: !!(mod & 4), meta: !!(mod & 2), shift: !!(mod & 1) });
+        continue;
+      }
+      // SS3 序列 \x1bOA：应用自己开了 \x1b[?1h（DECCKM）后终端就发这种，必须单独识别，
+      // 否则会被当成 alt+char 丢掉前缀、把 A/B/C/D 当普通字符打进输入行。
+      if (kb[0] === '\x1b' && kb[1] === 'O') {
+        if (kb.length === 2) {
+          // 序列未到齐：短暂等待下一段；若超时则按「esc + O」兜底处理，避免永久卡住输入流
+          if (!escTimer) escTimer = setTimeout(() => {
+            escTimer = null;
+            if (kb.length === 2 && kb[0] === '\x1b' && kb[1] === 'O') { kb = ''; onKey('', { name: 'escape' }); processKb(); }
+          }, 60);
+          return;
+        }
+        if ((m = /^\x1bO([A-Za-z])/.exec(kb))) {
+          kb = kb.slice(m[0].length);
+          const nm = CSI_KEYS[m[1]] || { H: 'home', F: 'end', P: 'f1', Q: 'f2', R: 'f3', S: 'f4' }[m[1]];
+          if (nm) onKey('', { name: nm });
+          continue;
+        }
+        kb = kb.slice(2); continue; // 未知 SS3：丢弃
+      }
       if ((m = /^\x1b\[\d*~/.exec(kb))) { kb = kb.slice(m[0].length); continue; }
       if (kb[0] === '\x1b') {
         if (kb.length === 1) { // 可能是孤按 esc，也可能是序列还没到齐 → 短暂等待
