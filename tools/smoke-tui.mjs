@@ -1,4 +1,4 @@
-// 无头冒烟测试：伪造 TTY，加载 bin/omni.js 的 chat 模式，
+// 无头冒烟测试：伪造 TTY，加载 bin/orcode.js 的 chat 模式，
 // 抓取首屏输出 + 模拟按键（提交任务 / 双击 esc / /models add 向导），校验不崩溃且布局行数正确。
 const chunks = [];
 const realWrite = process.stdout.write.bind(process.stdout);
@@ -30,21 +30,23 @@ fs.writeFileSync(path.join(tmp, '.omni', 'config.json'), JSON.stringify({
   pipeline: { stages: ['director', 'planner', 'workers', 'verifier'] },
 }, null, 2));
 
-process.argv = [process.argv[0], 'omni.js', 'chat', '--mock'];
+process.argv = [process.argv[0], 'orcode.js', 'chat', '--mock'];
 
 let exitCode = 0;
 try {
-  await import('../bin/omni.js');
+  await import('../bin/orcode.js');
   await new Promise((r) => setTimeout(r, 400));
   const first = chunks.join('');
   const hasAlt = first.includes('\x1b[?1049h');
-  const hasBrand = first.includes('OmniAgent');
+  const hasBrand = first.includes('ORcode');
+  const hasPixelLogo = first.includes('█'); // 像素大字标识（半块字符）
   const hasCursor = /\x1b\[\d+;\d+H/.test(first);
   console.error = () => {};
-  realWrite('\n[SMOKE] alt-screen=' + hasAlt + ' brand=' + hasBrand + ' cursorPos=' + hasCursor + ' bytes=' + first.length + '\n');
+  realWrite('\n[SMOKE] alt-screen=' + hasAlt + ' brand=' + hasBrand + ' pixelLogo=' + hasPixelLogo + ' cursorPos=' + hasCursor + ' bytes=' + first.length + '\n');
   realWrite('[SMOKE] dir=' + tmp + '\n');
   if (!hasAlt) { realWrite('[FAIL] 未进入独立窗口\n'); exitCode = 1; }
   if (!hasBrand) { realWrite('[FAIL] 缺少品牌标识\n'); exitCode = 1; }
+  if (!hasPixelLogo) { realWrite('[FAIL] 缺少像素大字标识\n'); exitCode = 1; }
   if (!hasCursor) { realWrite('[FAIL] 无光标定位序列\n'); exitCode = 1; }
   realWrite(exitCode === 0 ? '[SMOKE] PASS\n' : '[SMOKE] FAIL\n');
 } catch (e) {

@@ -1,4 +1,4 @@
-// OmniAgent 插件：安全数学求值（仅允许数字、运算符与 Math 函数/常数）
+// ORcode 插件：安全数学求值（仅允许数字、运算符与 Math 函数/常数）
 export default {
   name: 'calculator',
   description: '数值计算插件：四则运算、三角函数、开方、幂、常数等。',

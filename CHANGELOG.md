@@ -1,4 +1,4 @@
-# OmniAgent 发布说明 (CHANGELOG)
+# ORcode 发布说明 (CHANGELOG)
 
 ## [1.0.0] - 2026-10-08
 
@@ -22,19 +22,19 @@
 
 ```bash
 # 初始化配置
-node bin/omni.js init
+node bin/orcode.js init
 
 # 终端交互模式（推荐）
-node bin/omni.js
+node bin/orcode.js
 
 # Web 应用模式
-node bin/omni.js serve
+node bin/orcode.js serve
 
 # 官网（插件中心）
-node bin/omni.js site
+node bin/orcode.js site
 
 # 单次执行任务
-node bin/omni.js run "用 Python 写个贪吃蛇"
+node bin/orcode.js run "用 Python 写个贪吃蛇"
 ```
 
 ### 键盘快捷键

@@ -1,4 +1,4 @@
-// OmniAgent 插件：获取当前时间与日期（支持时区）
+// ORcode 插件：获取当前时间与日期（支持时区）
 export default {
   name: 'clock',
   description: '时间插件：获取当前本地/指定时区的日期时间。',

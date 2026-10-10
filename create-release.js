@@ -150,8 +150,8 @@ createRelease().then(result => {
   console.log('1. 访问项目 Release 页面');
   console.log(`   https://github.com/${OWNER}/${REPO}/releases/tag/${TAG_NAME}`);
   console.log('2. 下载源码 ZIP 或克隆仓库');
-  console.log('3. 运行：node bin/omni.js init');
-  console.log('4. 运行：node bin/omni.js');
+  console.log('3. 运行：node bin/orcode.js init');
+  console.log('4. 运行：node bin/orcode.js');
 }).catch(err => {
   console.error('❌ 主流程错误:', err);
   process.exit(1);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OmniAgent · 多模型协作智能体开发工具</title>
+  <title>ORcode · 多模型协作智能体开发工具</title>
   <meta name="description" content="自带模型、可下载插件、多岗位协作的开源智能体开发工具。在本地用任意 OpenAI 兼容端点驱动多个模型共同工作。" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -13,7 +13,7 @@
   <!-- 导航 -->
   <header class="nav">
     <div class="nav-inner">
-      <div class="brand"><span class="logo">◆</span> OmniAgent</div>
+      <div class="brand"><span class="logo">◆</span> ORcode</div>
       <nav class="nav-links">
         <a href="#features">特性</a>
         <a href="#flow">工作流</a>
@@ -33,7 +33,7 @@
       <div class="hero-text">
         <span class="pill">开源 · 零依赖 · 本地优先</span>
         <h1>让多个模型<br><span class="grad">像团队一样协作</span></h1>
-        <p class="lede">OmniAgent 是一个可自带模型的智能体开发工具。接入任意 OpenAI 兼容端点（含本地端口如 <code>localhost:11434</code>），定义多个「岗位」，让指挥、规划、研发、检验各司其职，插件从本官网一键下载。</p>
+        <p class="lede">ORcode 是一个可自带模型的智能体开发工具。接入任意 OpenAI 兼容端点（含本地端口如 <code>localhost:11434</code>），定义多个「岗位」，让指挥、规划、研发、检验各司其职，插件从本官网一键下载。</p>
         <div class="hero-actions">
           <a class="btn primary lg" href="#start">开始使用</a>
           <a class="btn ghost lg" href="#flow">看工作流</a>
@@ -44,8 +44,8 @@
       <div class="hero-term">
         <div class="term-bar"><span></span><span></span><span></span></div>
         <pre class="term">
-<span class="c-dim">$ node bin/omni.js serve</span>
-<span class="c-cyan">◆ OmniAgent 本地服务已启动：http://localhost:3000</span>
+<span class="c-dim">$ node bin/orcode.js serve</span>
+<span class="c-cyan">◆ ORcode 本地服务已启动：http://localhost:3000</span>
 
 <span class="c-dim">浏览器打开 → 填写你的模型密钥</span>
 <span class="c-dim">→ 运行任务 →</span>
@@ -61,7 +61,7 @@
 
   <!-- 特性 -->
   <section class="section" id="features">
-    <h2 class="sec-title">为什么是 OmniAgent</h2>
+    <h2 class="sec-title">为什么是 ORcode</h2>
     <p class="sec-sub">不是又一个聊天框，而是一套可编排的多模型工作流。</p>
     <div class="grid">
       <div class="card">
@@ -147,15 +147,15 @@
     <div class="start-box">
       <h2>三步跑起来</h2>
       <ol class="steps">
-        <li><code>node bin/omni.js init</code><span>生成 .omni/config.json</span></li>
-        <li><code>node bin/omni.js serve</code><span>浏览器打开 http://localhost:3000，填模型密钥</span></li>
-        <li><code>node bin/omni.js run "你的任务"</code><span>或直接在网页里点「运行」</span></li>
+        <li><code>node bin/orcode.js init</code><span>生成 .omni/config.json</span></li>
+        <li><code>node bin/orcode.js serve</code><span>浏览器打开 http://localhost:3000，填模型密钥</span></li>
+        <li><code>node bin/orcode.js run "你的任务"</code><span>或直接在网页里点「运行」</span></li>
       </ol>
     </div>
   </section>
 
   <footer class="footer">
-    <div>◆ OmniAgent · 多模型协作智能体开发工具</div>
+    <div>◆ ORcode · 多模型协作智能体开发工具</div>
     <div class="muted">本地优先 · 开源 · 零依赖</div>
   </footer>
 

@@ -24,7 +24,7 @@ fs.writeFileSync(path.join(tmp, '.omni', 'config.json'), JSON.stringify({
   models: { ds: { base_url: 'mock://', api_key: 'local', model: 'm', provider: 'Mock', display: 'Mock' } },
   roles: { director: { id: 'director', model: 'ds', tools: [] }, planner: { id: 'planner', model: 'ds', tools: [] }, worker1: { id: 'worker1', model: 'ds', tools: [] }, verifier: { id: 'verifier', model: 'ds', tools: [] } },
 }, null, 2));
-process.argv = [process.argv[0], 'omni.js', 'chat', '--mock'];
+process.argv = [process.argv[0], 'orcode.js', 'chat', '--mock'];
 
 const feed = (s) => dataHandler(Buffer.from(s, 'utf8'));
 const type = (t) => feed(t);
@@ -36,7 +36,7 @@ const fail = (m) => { realWrite('[FAIL] ' + m + '\n'); exitCode = 1; };
 const ok = (m) => realWrite('  ✓ ' + m + '\n');
 
 try {
-  await import('../bin/omni.js');
+  await import('../bin/orcode.js');
   await sleep(300);
   if (!dataHandler) { realWrite('[FAIL] 未捕获 data 处理器\n'); process.exit(1); }
 

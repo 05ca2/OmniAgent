@@ -1,4 +1,4 @@
-// 本地 HTTP 服务：把 OmniAgent 变成一个在浏览器里用的本地应用（默认 http://localhost:3000）
+// 本地 HTTP 服务：把 ORcode 变成一个在浏览器里用的本地应用（默认 http://localhost:3000）
 // 纯 node:http 实现，无第三方依赖。提供静态 UI + JSON API + SSE 流式运行。
 import http from 'node:http';
 import fs from 'node:fs';
@@ -242,7 +242,7 @@ export function startServer({ port = 3000, cwd = process.cwd() } = {}) {
     return serveStatic(req, res, url);
   });
   server.listen(port, () => {
-    console.log(`\n◆ OmniAgent 本地服务已启动：${'\x1b[36m'}http://localhost:${port}${'\x1b[0m'}`);
+    console.log(`\n◆ ORcode 本地服务已启动：${'\x1b[36m'}http://localhost:${port}${'\x1b[0m'}`);
     console.log('  按 Ctrl+C 停止。首次使用会生成 .omni/config.json，去「配置」页填模型密钥。\n');
   });
   return server;

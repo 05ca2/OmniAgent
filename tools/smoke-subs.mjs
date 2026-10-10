@@ -28,7 +28,7 @@ fs.writeFileSync(path.join(tmp, '.omni', 'config.json'), JSON.stringify({
   roles: { director: R('director'), planner: R('planner'), researcher: R('researcher'), coder: R('coder'), verifier: R('verifier') },
   pipeline: { stages: ['director', 'planner', 'workers', 'verifier'], max_workers: 1, verify_rounds: 1 },
 }, null, 2));
-process.argv = [process.argv[0], 'omni.js', 'chat', '--mock'];
+process.argv = [process.argv[0], 'orcode.js', 'chat', '--mock'];
 
 const feed = (s) => dataHandler(Buffer.from(s, 'utf8'));
 const type = (t) => feed(t);
@@ -43,7 +43,7 @@ const fail = (m) => { realWrite('[FAIL] ' + m + '\n'); exitCode = 1; };
 const ok = (m) => realWrite('  ✓ ' + m + '\n');
 
 try {
-  await import('../bin/omni.js');
+  await import('../bin/orcode.js');
   await sleep(300);
   if (!dataHandler || !globalThis.__OMNI_TEST) { realWrite('[FAIL] 初始化失败\n'); process.exit(1); }
 

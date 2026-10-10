@@ -17,7 +17,7 @@ async function loadPlugins() {
     list.forEach((pl) => {
       const card = document.createElement('div');
       card.className = 'card plugin-card';
-      const cmd = `node bin/omni.js plugin add ${pl.download}`;
+      const cmd = `node bin/orcode.js plugin add ${pl.download}`;
       card.innerHTML = `
         <div class="pc-head"><span class="pc-name">${esc(pl.name)}</span><span class="pc-ver">v${esc(pl.version || '1.0')}</span></div>
         <div class="pc-desc">${esc(pl.description || '')}</div>

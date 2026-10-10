@@ -1,4 +1,4 @@
-# OmniAgent · 多模型协作智能体开发工具
+# ORcode · 多模型协作智能体开发工具
 
 类 opencode / codex / claude code 的智能体开发工具。你**自带模型**（填 API 地址+密钥，可指向任意
 端口如本地 `localhost:11434`），**下载插件**扩展能力，并配置多个**岗位(role)**，让多模型像团队一样协作：
@@ -7,7 +7,7 @@
 指挥 Director → 规划 Planner → 多岗位 Workers（并行）→ 检验 Verifier（不通过则补做）
 ```
 
-- **终端优先**：Codex 风格极简 TUI —— 独立窗口、左上常驻 OMNIAGENT 大字标识、居中暗色标志欢迎屏；输入指令后切换为「左栏对话 / 右栏工作树」双栏布局，支持滚轮/↑↓ 翻看历史。
+- **终端优先**：Codex 风格极简 TUI —— 独立窗口、左上常驻 ORCODE 大字标识、居中暗色标志欢迎屏；输入指令后切换为「左栏对话 / 右栏工作树」双栏布局，支持滚轮/↑↓ 翻看历史。
 - **两种协作模式**：默认**单模型直接对话**；输入 `/hoa-loop <任务>`（需已装 skill）才启动"指挥→规划→执行→检验"多模型流水线，各阶段进独立子会话。
 - **本地 Web 应用**：`serve` 后在浏览器打开 `http://localhost:3000`，可视化看每个岗位的思考与工具调用。
 - **官方官网**：`site` 启动 `http://localhost:8080`，含插件中心与反馈。
@@ -24,20 +24,20 @@ cd OmniAgent
 
 > 不用 git 的话，在 GitHub 页面点 **Code → Download ZIP** 解压即可。
 
-### 2. 安装 `omniagent` 全局命令
+### 2. 安装 `orcode` 全局命令
 
 ```bash
 npm install -g .
 ```
 
-零依赖、无编译、秒装。完成后你的终端里就有了 `omniagent` 命令（Windows 的 PowerShell / CMD 同样适用）。
+零依赖、无编译、秒装。完成后你的终端里就有了 `orcode` 命令（Windows 的 PowerShell / CMD 同样适用）。
 
-> 不想装全局命令？也可以始终用 `node bin/omni.js` 代替 `omniagent`，效果完全一样。
+> 不想装全局命令？也可以始终用 `node bin/orcode.js` 代替 `orcode`，效果完全一样。
 
 ### 3. 初始化配置（交互式）
 
 ```bash
-omniagent init
+orcode init
 ```
 
 会**以问卷形式一题一题问你**（直接回车 = 使用括号中的默认值；输入内容明文可见，仅保存在本机）：
@@ -53,12 +53,12 @@ base_url: http://token.sensenova.cn/v1
 API key:  sk-y****eHs
 [4/4] 确认写入以上配置？ (Y): y
 
-✓ 配置已写入：D:\...\OmniAgent\.omni\config.json
-✓ 初始化完成 ✓  直接运行  omniagent  即可进入界面（无需任何参数）。
+✓ 配置已写入：D:\...\ORcode\.omni\config.json
+✓ 初始化完成 ✓  直接运行  orcode  即可进入界面（无需任何参数）。
 ```
 
 > 非交互环境（如管道 / CI）下 `init` 会先生成带空密钥的配置文件，并提示你之后手工补 `api_key`，
-> 或在真实终端重跑 `omniagent init` 交互式填写。
+> 或在真实终端重跑 `orcode init` 交互式填写。
 >
 > 想接入本地模型（Ollama 等）？`API base_url` 填 `http://localhost:11434/v1` 即可。
 
@@ -67,14 +67,14 @@ API key:  sk-y****eHs
 初始化结束（或已填好密钥）后，**直接敲命令即可进入界面**，无需任何参数：
 
 ```bash
-omniagent
+orcode
 ```
 
-> 在不带参数的情况下运行 `omniagent`（且处于终端）会自动进入交互界面；若尚未 `init` 会提示你先初始化。
-> 想跑单次任务而非交互，可用 `omniagent run "你的任务"`。
+> 在不带参数的情况下运行 `orcode`（且处于终端）会自动进入交互界面；若尚未 `init` 会提示你先初始化。
+> 想跑单次任务而非交互，可用 `orcode run "你的任务"`。
 
 **还没有 API 密钥？** 先体验全流程：进入界面后输入 `/mock` 切换演示模式（无需任何密钥），
-或者单次执行 `omniagent run "调研 RAG 主流方案" --mock`。
+或者单次执行 `orcode run "调研 RAG 主流方案" --mock`。
 
 ### 升级
 
@@ -89,14 +89,14 @@ npm install -g .
 **启动画面**（输入指令前，Codex 风格极简布局）：左上标题栏 + 居中暗色标志 + 底部输入行与状态行：
 
 ```
->⌒ OmniAgent (v0.2.0)
+>⌒ ORcode (v0.2.0)
   D:\新建文件夹\openrelay
   permissions: YOLO mode
 
                 ·⡀  ⢀⡀  ⢀⡀
-              （OmniAgent 标志 · 暗色点阵）
+              （ORcode 标志 · 暗色点阵）
 
-❯ Ask OmniAgent to do anything
+❯ Ask ORcode to do anything
 deepseek-chat · D:\新建文件夹\openrelay
 tab for agents · ? for shortcuts
 ```
@@ -132,7 +132,7 @@ tab for agents · ? for shortcuts
 | `/reload` | 重新加载 `.omni/config.json`（改了配置不用重启） |
 | `/clear` | 清空对话 |
 
-单次执行（不进交互）：`omniagent run "你的任务"`（可加 `--mock` / `--preset`）。
+单次执行（不进交互）：`orcode run "你的任务"`（可加 `--mock` / `--preset`）。
 管道或非 TTY 下输出自动去色，方便重定向到文件。
 
 ### 子会话：规划/执行/检验各自独立窗口
@@ -197,13 +197,13 @@ tab for agents · ? for shortcuts
 
 填完一个后会问「继续添加下一个？」，输 `y` 接着加，直接回车则**一次性保存全部**并写入
 `.omni/config.json`（键名由模型 ID 自动生成，重名自动加后缀）。随时按 `esc` 取消。
-命令行下 `omniagent models` 也能列出同样的信息。
+命令行下 `orcode models` 也能列出同样的信息。
 
 ## 本地 Web 应用
 
 ```bash
-omniagent init
-omniagent serve        # 浏览器打开 http://localhost:3000
+orcode init
+orcode serve        # 浏览器打开 http://localhost:3000
 ```
 
 在「配置」页可视化填模型密钥 → 在「运行」页跑任务，实时看每个岗位的思考与工具调用。
@@ -211,7 +211,7 @@ omniagent serve        # 浏览器打开 http://localhost:3000
 ## 官方官网（插件中心 + 反馈）
 
 ```bash
-omniagent site         # 启动官网 http://localhost:8080
+orcode site         # 启动官网 http://localhost:8080
 ```
 
 - **插件中心**：列出可下载插件，点「下载 .js」或复制 `plugin add` 命令安装。
@@ -242,7 +242,7 @@ vLLM、通义千问、智谱、月之暗面 等。
 ## 插件（可下载的能力）
 
 内置：`file`（读写搜索）、`shell`（执行命令）、`web`（联网抓取/搜索）。
-下载第三方插件：在网页「插件中心」一键安装，或 `omniagent plugin add <url>`
+下载第三方插件：在网页「插件中心」一键安装，或 `orcode plugin add <url>`
 （存到 `.omni/plugins`，下次自动加载）。
 示例插件见 `site/plugins/`：`translator`、`calculator`、`clock`。
 ⚠️ 第三方插件会获得 shell/文件执行权限，只装可信来源。
@@ -267,7 +267,7 @@ vLLM、通义千问、智谱、月之暗面 等。
 ## 目录结构
 
 ```
-bin/omni.js             CLI 入口（init/run/serve/site/config/...）
+bin/orcode.js             CLI 入口（init/run/serve/site/config/...）
 src/
   config.js            配置读写（.omni/config.json）
   presets.js           预设岗位与流水线

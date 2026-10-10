@@ -1,4 +1,4 @@
-// OmniAgent 本地 Web UI 前端逻辑（原生 JS，无框架）
+// ORcode 本地 Web UI 前端逻辑（原生 JS，无框架）
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 

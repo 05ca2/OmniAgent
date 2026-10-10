@@ -62,7 +62,7 @@ export function startSiteServer({ port = 8080 } = {}) {
     return serveStatic(req, res, url);
   });
   server.listen(port, () => {
-    console.log(`\n◆ OmniAgent 官网已启动：${'\x1b[36m'}http://localhost:${port}${'\x1b[0m'}`);
+    console.log(`\n◆ ORcode 官网已启动：${'\x1b[36m'}http://localhost:${port}${'\x1b[0m'}`);
     console.log('  含插件中心与反馈；插件文件由 /plugins/*.js 提供，反馈落地到 feedback.json。\n');
   });
   return server;

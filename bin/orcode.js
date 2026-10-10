@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// OmniAgent CLI 入口：init / run / chat / config / roles / models / plugin / preset / help
+// ORcode CLI 入口：init / run / chat / config / roles / models / plugin / preset / help
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -18,8 +18,8 @@ import { maskKey, truncate } from '../src/util.js';
 import { ui } from '../src/ui.js';
 
 const HELP = `
-OmniAgent —— 多模型协作智能体开发工具
-用法：node bin/omni.js <命令> [参数]
+ORcode —— 多模型协作智能体开发工具
+用法：node bin/orcode.js <命令> [参数]
 
 命令：
   init [--preset <name>]       在当前目录初始化 .omni/config.json（含预设岗位）
@@ -33,7 +33,7 @@ OmniAgent —— 多模型协作智能体开发工具
                                实时展示推理进度；模型工作时仍可输入（自动排队）；滚轮/↑↓ 翻看历史；
                                连按两次 esc 中断；命令弹层可直接点击；右下角 ⚙ 设置可添加模型
                                会话命令：/hoa-loop /model /settings /open /agents /models /mock /plugins /reload /status /clear /help /exit
-  window                       在独立的终端窗口中打开 OmniAgent 界面
+  window                       在独立的终端窗口中打开 ORcode 界面
   serve [--port 3000]          启动本地 Web 服务，浏览器打开 http://localhost:3000 使用
   site [--port 8080]           启动官方官网（含插件中心 / 反馈），默认 http://localhost:8080
   config                       查看当前配置（密钥脱敏）
@@ -44,13 +44,13 @@ OmniAgent —— 多模型协作智能体开发工具
   preset apply <name>          套用某预设的岗位与流水线（保留你的 models）
   help                         显示本帮助
 
-提示：直接运行  omniagent  会在独立窗口打开交互界面；omniagent chat 在当前终端内打开。
+提示：直接运行  orcode  会在独立窗口打开交互界面；orcode chat 在当前终端内打开。
 会话内 /models 查看模型（供应商/显示名），/models add 可批量添加 OpenAI 兼容模型。
 
 示例：
-  node bin/omni.js init
-  node bin/omni.js run "用 Python 写一个贪吃蛇游戏并跑通" --mock
-  node bin/omni.js run "调研 RAG 的主流方案" --preset research
+  node bin/orcode.js init
+  node bin/orcode.js run "用 Python 写一个贪吃蛇游戏并跑通" --mock
+  node bin/orcode.js run "调研 RAG 的主流方案" --preset research
 `;
 
 // ---- 问卷式输入辅助（单一持久 readline；line 事件队列保证管道/粘贴多行也不丢输入）----
@@ -130,7 +130,7 @@ const red = (s) => (IS_TTY ? `\x1b[31m${s}\x1b[0m` : String(s)); // 错误提示
 // 深色输入条背景（内置 fg 重置不吞背景色）
 const barBg = (s) => (IS_TTY ? `\x1b[48;5;236m${s}\x1b[0m` : String(s));
 const fgDim = (s) => (IS_TTY ? `\x1b[90m${s}\x1b[39m` : String(s));
-const INPUT_PH = 'Ask OmniAgent to do anything';
+const INPUT_PH = 'Ask ORcode to do anything';
 
 // ---------- opencode 风格像素 Logo ----------
 const GLYPHS = {
@@ -142,7 +142,10 @@ const GLYPHS = {
   G: ['.####', '#....', '#..##', '#...#', '.###.'],
   E: ['#####', '#....', '####.', '#....', '#####'],
   T: ['#####', '..#..', '..#..', '..#..', '..#..'],
+  R: ['####.', '#...#', '####.', '#.#..', '#..#.'],
+  C: ['.###.', '#...#', '#....', '#...#', '.###.'],
 };
+const BRAND = 'ORCODE'; // 品牌名（大字标识 / 界面文案）
 // ---------- 品牌标志（tools/logo2ascii.js 从用户 PNG 生成，Codex 风格暗色背景） ----------
 const LOGO_ART = "\n\n\n\n                          ⣀⡀\n                        ⢀⣾⠟⢿⣆\n                       ⢀⣾⠏ ⠈⢿⡄\n             ⢀⣀⣀⣀     ⢀⣾⠏   ⠘⣿⡄\n          ⣠⣶⠿⠛⠛⠛⠛⠻⢷⣦⡀⢀⣾⠏     ⠘⣿⡀\n        ⢠⣾⠏        ⠈⢿⣾⠋       ⠹⣷⡀\n        ⣿⠇           ⣿⡆  ⢀⣀⣀⣀⣀⣰⣿⣿⡆\n        ⣿⡄           ⣿⣇⣴⠿⠛⠋⠉⠉⠉⠉⠙⢿⣆\n        ⠹⣷⡀         ⣰⡿⠟⠁        ⠈⢿⣆\n         ⠘⠿⣦⣄⣀  ⢀⣀⣤⡾⠛            ⠈⣿⡄\n           ⠈⠉⠛⠛⠛⠛⠋⠉               ⠘⠛\n\n\n\n\n                                    ⠈⠐⠂⠃⠈⠃⠂";
 const LOGO_LINES = LOGO_ART.split('\n').filter((l) => l.trim());
@@ -157,26 +160,19 @@ function pixelLogo(word) {
   return rows.join('\n');
 }
 
-// 大字 OMNIAGENT 标识：像素字形用 ▀▄█ 半块压缩成 3 行（OMNI 灰 / AGENT 亮白，仿用户设计图）
+// 大字 ORCODE 标识：像素字形完整 5 行渲染（前半段灰 / 后半段亮，仿 opencode 双色调）
+// 注：不要用 ▀▄ 半块压缩成 3 行——5 行字形两两压缩会让上下弧线错位、末行丢失，字形变形。
 function bigLogoLines() {
-  const rows = ['', '', ''];
-  'OMNIAGENT'.split('').forEach((ch, i) => {
+  const rows = ['', '', '', '', ''];
+  const half = Math.ceil(BRAND.length / 2);
+  BRAND.split('').forEach((ch, i) => {
     const g = GLYPHS[ch] || GLYPHS.O;
-    const paint = i < 4 ? grey : bold;
-    for (let k = 0; k < 3; k++) {
-      const top = g[2 * k] || '.....';
-      const bot = g[2 * k + 1] || '.....';
-      let s = '';
-      for (let c = 0; c < 5; c++) {
-        const t = top[c] === '#', b = bot[c] === '#';
-        s += t && b ? '█' : t ? '▀' : b ? '▄' : ' ';
-      }
-      rows[k] += paint(s) + ' ';
-    }
+    const paint = i < half ? grey : bold;
+    for (let r = 0; r < 5; r++) rows[r] += paint(g[r].replace(/#/g, '█')) + ' ';
   });
   return rows.map((r) => r.replace(/\s+$/, ''));
 }
-const BIG_LOGO = bigLogoLines(); // 宽 9*6-1 = 53 列
+const BIG_LOGO = bigLogoLines(); // 宽 = BRAND.length * 6 - 1 列
 
 const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version || '0.2.0'; } catch { return '0.2.0'; } })();
 
@@ -522,7 +518,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     while (L.length < H - 2) L.push('');
     L.length = Math.max(L.length, H - 2);
     L[H - 2] = cut(grey('/~ ') + path.basename(process.cwd()));
-    L[H - 1] = cut(cyan('● ') + 'OmniAgent ' + grey('v' + VERSION) + (mock ? yellow('  mock') : ''));
+    L[H - 1] = cut(cyan('● ') + 'ORcode ' + grey('v' + VERSION) + (mock ? yellow('  mock') : ''));
     return L.slice(0, H);
   }
 
@@ -578,10 +574,10 @@ async function runInteractive(baseCfg, flags, plugins) {
     return L.slice(0, H);
   }
 
-  // 主区左上角品牌标识（单行）：OmniAgent 名称 + 版本 + 模式
+  // 主区左上角品牌标识（单行）：ORcode 名称 + 版本 + 模式
   function brandLine(MW) {
     const tag = mock ? yellow('  [演示模式]') : '';
-    const s = bold('>⌒ OmniAgent') + grey(' v' + VERSION) + grey(' · 多模型协作') + tag;
+    const s = bold('>⌒ ORcode') + grey(' v' + VERSION) + grey(' · 多模型协作') + tag;
     return cutPlain(s, MW);
   }
 
@@ -623,7 +619,7 @@ async function runInteractive(baseCfg, flags, plugins) {
         ? cyan(cfg.models[chatModel]?.model || chatModel)
         : role
         ? cyan(m ? m.model : role)
-        : yellow('未配置模型 · 先运行 omniagent init')) + grey(' · ' + process.cwd()) + (mock ? yellow(' · mock') : '');
+        : yellow('未配置模型 · 先运行 orcode init')) + grey(' · ' + process.cwd()) + (mock ? yellow(' · mock') : '');
     // 忙碌时的实时进度行（转轮 + 当前动作 + 主会话推理原文）
     const busyRows = [];
     if (busy) {
@@ -643,8 +639,9 @@ async function runInteractive(baseCfg, flags, plugins) {
     const hintPad = Math.max(1, MW - vlen(hintL) - vlen(hintR) - 2);
     const hintRow = hintL + ' '.repeat(hintPad) + hintR;
 
-    // 左上角大字标识：OMNIAGENT 像素字（3 行，OMNI 灰 / AGENT 亮白）；窄终端退化为单行
-    const logoRows = MW >= 54 ? BIG_LOGO : [brandLine(MW)];
+    // 左上角大字标识：ORCODE 像素字（3 行，ORC 灰 / ODE 亮白）；窄终端退化为单行
+    const logoW = BIG_LOGO[0].length; // █ 属窄字符，按字符数估算即可
+    const logoRows = MW >= Math.min(54, logoW + 2) ? BIG_LOGO : [brandLine(MW)];
     const logoN = logoRows.length + 1; // +1 空行
 
     // 把全部会话记录折叠成显示行，再按 scrollOffset 取尾部窗口（滚轮/↑↓ 翻历史）
@@ -696,7 +693,7 @@ async function runInteractive(baseCfg, flags, plugins) {
       const s = subs.get(view);
       if (!s) { view = null; }
       else {
-        const head = bold(cyan('← OmniAgent')) + grey(' · 子会话 ') + cyan(`[${s.idx}] ${s.title}`)
+        const head = bold(cyan('← ORcode')) + grey(' · 子会话 ') + cyan(`[${s.idx}] ${s.title}`)
           + (s.status === 'run' ? yellow('  ● 运行中') : green('  ✓ 已完成'))
           + (s.sub ? grey('  ' + (s.sub.length > 30 ? s.sub.slice(0, 30) + '…' : s.sub)) : '');
         const body = [];
@@ -981,7 +978,7 @@ async function runInteractive(baseCfg, flags, plugins) {
       const c = loadConfig();
       if (c) { cfg = c; agentIdx = 0; chatModel = null; push(green('配置已重载')); } else push(yellow('未找到配置'));
     } else if (t === '/status') {
-      push(bold('OmniAgent') + grey(` v${VERSION}`) + (mock ? yellow('  [演示模式]') : ''));
+      push(bold('ORcode') + grey(` v${VERSION}`) + (mock ? yellow('  [演示模式]') : ''));
       for (const [id, mm] of Object.entries(cfg.models || {})) push(`  模型 ${id}: ${mm.model} @ ${mm.base_url} (${maskKey(mm.api_key)})`);
       for (const [id, rr] of Object.entries(cfg.roles || {})) push(`  岗位 ${id} → ${rr.model} · 工具:${rr.tools.join(',') || '无'}`);
       push(`  插件 ${pluginNames.length} 个：${pluginNames.map((p) => p.name).join(', ') || '无'}`);
@@ -1384,7 +1381,7 @@ async function runInteractive(baseCfg, flags, plugins) {
 
   // 启动画面
   // 欢迎屏（与 Codex 一致：顶栏 + 居中标志 + 右侧栏目）由下方 render() 绘制
-  push(dim('欢迎使用 OmniAgent 终端模式 —— 直接输入任务，或输入 / 查看命令。tab 切换岗位，ctrl+p 命令面板。'));
+  push(dim('欢迎使用 ORcode 终端模式 —— 直接输入任务，或输入 / 查看命令。tab 切换岗位，ctrl+p 命令面板。'));
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.on('data', onData);
@@ -1449,10 +1446,10 @@ async function main() {
   const { pos, flags } = parseFlags(rest);
 
   if (!cmd || cmd === 'help' || cmd === '-h') {
-    // 终端里直接敲 `node bin/omni.js`（无参数）即进入交互模式；管道/重定向时显示帮助
+    // 终端里直接敲 `node bin/orcode.js`（无参数）即进入交互模式；管道/重定向时显示帮助
     if (!cmd && process.stdin.isTTY) {
       let cfg = loadConfig();
-      if (!cfg) { ui.error('尚未初始化，请先运行 init 生成配置'); ui.info('生成后直接运行 node bin/omni.js 即可进入交互模式'); return; }
+      if (!cfg) { ui.error('尚未初始化，请先运行 init 生成配置'); ui.info('生成后直接运行 node bin/orcode.js 即可进入交互模式'); return; }
       const plugins = await loadPlugins(PLUGIN_DIR);
       await runInteractive(cfg, flags, plugins);
       return;
@@ -1468,7 +1465,7 @@ async function main() {
     cfg.registryUrl = 'http://localhost:8080/plugins.json';
 
     if (process.stdin.isTTY) {
-      ui.header(`初始化 OmniAgent（预设 ${name}）`);
+      ui.header(`初始化 ORcode（预设 ${name}）`);
       ui.info('请依次回答以下问题（直接回车 = 使用括号中的默认值）：');
       console.log('');
       const base = await askQ(1, 4, 'API base_url', { def: 'https://api.openai.com/v1' });
@@ -1490,10 +1487,10 @@ async function main() {
     } else {
       saveConfig(cfg);
       ui.ok(`已生成配置（预设 ${name}）→ ${CONFIG_PATH}`);
-      ui.info('请将 models.*.api_key 替换为你的密钥，或在终端中重跑 omniagent init 交互式填写。');
+      ui.info('请将 models.*.api_key 替换为你的密钥，或在终端中重跑 orcode init 交互式填写。');
     }
     closeRl();
-    ui.ok('初始化完成 ✓  直接运行  omniagent  即可进入界面（无需任何参数）。');
+    ui.ok('初始化完成 ✓  直接运行  orcode  即可进入界面（无需任何参数）。');
     return;
   }
 
@@ -1579,7 +1576,7 @@ async function main() {
     checkKeys(cfg, flags.mock);
     const plugins = await loadPlugins(PLUGIN_DIR);
     const ctx = { cwd: process.cwd() };
-    ui.header('OmniAgent 开始执行');
+    ui.header('ORcode 开始执行');
     ui.info('任务：' + task + (flags.mock ? '  [MOCK 模式]' : ''));
     const report = await runPipeline(task, cfg, plugins, ctx, flags.mock, cliTrace());
 

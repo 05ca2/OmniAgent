@@ -3,7 +3,7 @@ import { truncate } from './util.js';
 
 export function renderReport(task, report, mock) {
   const lines = [];
-  lines.push(`# OmniAgent 运行报告 ${mock ? '(MOCK)' : ''}`);
+  lines.push(`# ORcode 运行报告 ${mock ? '(MOCK)' : ''}`);
   lines.push('');
   lines.push(`**任务：** ${task}`);
   lines.push('');

@@ -1,10 +1,10 @@
-# OmniAgent 如何发布到 GitHub
+# ORcode 如何发布到 GitHub
 
 ## 第一步：在 GitHub 上创建新仓库
 
 1. **访问 GitHub**：https://github.com/new
 2. **填写仓库信息**：
-   - Repository name: `omniagent`（或其他名字）
+   - Repository name: `orcode`（或其他名字）
    - Description: `多模型协作智能体开发工具 - Multi-model orchestration CLI`
    - **Public**（公开）或 **Private**（私有）
    - **不要** 勾选 "Initialize this repository with a README"（因为你已经有 README 了）
@@ -60,7 +60,7 @@ ssh-keygen -t ed25519 -C "your_email@example.com"
 git config --global credential.helper store
 
 # 推送仓库（SSH URL）
-git remote add origin git@github.com:username/omniagent.git
+git remote add origin git@github.com:username/orcode.git
 git push -u origin master
 ```
 
@@ -79,12 +79,12 @@ git log --oneline --graph --all
 复制你的 GitHub 仓库地址，其他人可以：
 
 ```bash
-git clone https://github.com/username/omniagent.git
-cd omniagent
+git clone https://github.com/username/orcode.git
+cd orcode
 
 # 直接运行，无需 npm install！
-node bin/omni.js init
-node bin/omni.js
+node bin/orcode.js init
+node bin/orcode.js
 ```
 
 ## 常见问题

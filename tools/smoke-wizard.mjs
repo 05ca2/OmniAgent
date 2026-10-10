@@ -28,7 +28,7 @@ fs.writeFileSync(path.join(tmp, '.omni', 'config.json'), JSON.stringify({
   roles: { director: { model: 'ds', tools: [] } },
 }, null, 2));
 
-process.argv = [process.argv[0], 'omni.js', 'chat', '--mock'];
+process.argv = [process.argv[0], 'orcode.js', 'chat', '--mock'];
 
 function type(text) {
   for (const ch of text) keyHandler(ch, { name: ch.length === 1 ? ch : '' });
@@ -37,7 +37,7 @@ function enter() { keyHandler('\r', { name: 'return' }); }
 
 let exitCode = 0;
 try {
-  await import('../bin/omni.js');
+  await import('../bin/orcode.js');
   await new Promise((r) => setTimeout(r, 300));
   if (!keyHandler) { realWrite('[FAIL] 未捕获 keypress 处理器\n'); process.exit(1); }
 
