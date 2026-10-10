@@ -133,36 +133,6 @@ const fgDim = (s) => (IS_TTY ? `\x1b[90m${s}\x1b[39m` : String(s));
 const INPUT_PH = 'Ask ORcode to do anything';
 
 const BRAND = 'ORCODE'; // 品牌名（界面文案）
-// ---------- 背景盲文标志：由 assets/logo-white-512.png 转点阵（螺旋星芒，40 列 x 20 行） ----------
-// ---------- 背景盲文标志：由 assets/logo-white-512.png 转点阵（螺旋星芒，48 列 x 24 行） ----------
-// 生成方式：python tools/png2braille.py 48 4 3> _bg.txt
-const LOGO_ART = [
-  '               ⡀',
-  '              ⢠⣿⣷⣤⡀',
-  '        ⡀⠄    ⣾⣿⣿⣿⣿⣦⣀               ⢀⣀⣀⡄',
-  '             ⣸⣿⣿⣿⣿⣿⣿⣿⣷⣦⡀    ⣀⣀⣠⣤⣴⣶⣾⣿⣿⣿⣿⡇',
-  '     ⠈      ⢠⣿⣿⣿⡿⠟⠉ ⠙⠿⣿⣿⣷⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁',
-  '            ⣾⣿⡿⠉      ⠈⠙⠿⣿⣦⡀   ⠈⠙⠿⣿⣿⣿⣿⣿',
-  '           ⣸⣿⡿⠁ ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣈⡛⢿⣦⣄    ⠈⠙⢻⣿⣿',
-  '        ⢀⣠⣴⣿⣿⣿⣿⡿⢿⣿⡿⠿⢿⣛⣻⣿⢿⣿⣛⡿⠿⣿⣧⣀    ⢸⣿⣿',
-  '     ⢀⣤⣾⣿⣿⣿⠿⠛⠉⠁⣠⣿⢏⣴⣾⠟⣛⣭⣶⣷⣮⣝⡛⠷⣦⣌⢻⣦   ⣾⣿⣿⡀',
-  '  ⣠⣴⣿⣿⣿⣿⠋⠁   ⢀⣼⣟⣵⣿⢃⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⢹⣧⢻⣧  ⣿⣿⢿⣿⣆',
-  '⠲⣿⣿⣿⣿⣿⣿⣿    ⢀⣾⣿⡟⣽⡏⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⢻⣆⢿⡆⢰⣿⡟⠈⢻⣿⣷⡄',
-  ' ⠈⠻⣿⣿⣿⣿⡏   ⢀⣾⣿⠟⢸⡟⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣎⢿⡜⣿⣼⡿⠁  ⢻⣿⣿⣦⡀',
-  '   ⠈⠻⣿⣿⣿⡀ ⢀⣾⣿⢿⣆⢸⣧⢹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢇⣾⠃⣼⡿⠃   ⠈⣿⣿⣿⣷⣄',
-  '     ⠈⠻⣿⣿⡄⣸⣿⡇⠘⣿⡆⢿⣇⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⣼⡏⣼⣿⠃    ⢸⣿⣿⣿⣿⣿⣦⡀',
-  '       ⠈⠻⣿⣿⣿⠁ ⠘⣿⣎⣿⣌⠿⢿⣿⣿⣿⣿⣿⣿⣿⡿⢟⣸⣟⣼⡟⠁    ⢠⣿⣿⣿⣿⣿⣿⠿⠛',
-  '         ⣿⣿⣿   ⠘⣿⣎⠙⠻⢶⣭⣙⠻⠿⢛⣩⣵⠾⠛⢩⣾⠏ ⣀⣠⣤⣶⣶⣿⣿⣿⠿⠛⠉⠁',
-  '         ⣿⣿⡇    ⠈⠻⣿⣶⣦⣬⣟⣿⣾⣛⣉⣥⣤⣴⣿⣷⣾⣿⠿⣿⣿⡿⠟⠛⠁',
-  '  ⠢     ⢰⣿⣿⣧⣄⡀    ⠙⢿⣷⣌⡉⠉⠉⠛⠛⠛⠉⠉⠉⠉ ⢀⣼⣿⡏',
-  '   ⠡    ⢸⣿⣿⣿⣿⣿⣶⣄⣀⣀⡀ ⠹⣿⣿⣦⡀       ⢀⣾⣿⡿',
-  '     ⢄  ⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠿⠿⣿⣿⣷⣄  ⢀⣠⣶⣿⣿⣿⠃      ⢀⠈',
-  '      ⠐⢄⢸⣿⣿⠿⠿⠟⠛⠋⠉⠉     ⠈⠛⢿⣿⣷⣾⣿⣿⣿⣿⣿⡏     ⢀⠔⠁',
-  '        ⠙⠄⡀               ⠙⠻⣿⣿⣿⣿⣿⡟    ⡀⠐⠁',
-  '          ⠈⠒⠄⣀              ⠈⠙⢿⣿⣿⠁ ⡀ ⠈',
-  '              ⠉⠒⠠⠄⣀            ⠈⠃',
-].join('\n');
-const LOGO_LINES = LOGO_ART.split('\n').filter((l) => l.trim());
 
 // ---------- 左上角品牌文字：ORCODE 像素字标（5 行完整字形，前半灰/后半亮） ----------
 // 注：不要用 ▀▄ 半块压缩成 3 行——5 行字形两两压缩会让上下弧线错位、末行丢失，字形变形。
@@ -822,24 +792,12 @@ async function runInteractive(baseCfg, flags, plugins) {
       return;
     }
 
-    // ---- 对话布局：左栏对话 + 右栏回复，标志作整屏水印背景 ----
-    const bg = Array(H).fill('');
-    {
-      const top = Math.max(0, Math.floor((H - LOGO_LINES.length) / 2));
-      LOGO_LINES.forEach((l, k) => {
-        const w = vlen(l);
-        // 在左栏宽度内居中（不能按全屏 W 居中，否则会被中间分割线切成两半）
-        const p = Math.max(0, Math.floor((MW - w) / 2));
-        bg[top + k] = ' '.repeat(p) + l;
-      });
-    }
+    // ---- 对话布局：左栏对话 + 右栏回复（无背景水印）----
     const rows = [];
     for (let i = 0; i < H; i++) {
       const l = main[i] || '';
       const r = right[i] || '';
-      const bl = l ? '' : bg[i].slice(0, MW).padEnd(MW);
-      const br = r ? '' : bg[i].slice(MW + 3).padEnd(RW);
-      rows.push((l ? vpad(l, MW) : grey(bl)) + cyan(' ┃ ') + (r ? vpad(r, RW) : grey(br)));
+      rows.push((l ? vpad(l, MW) : ' '.repeat(MW)) + cyan(' ┃ ') + (r ? vpad(r, RW) : ' '.repeat(RW)));
     }
     // 光标定位回输入行内（main 倒数第 3 行 = inputRow，「 ❯ 」后）
     const typedO = line ? cutPlain(line, Math.max(8, MW - 8)) : '';
@@ -1047,7 +1005,7 @@ async function runInteractive(baseCfg, flags, plugins) {
     if (!t) { render(); return; }
     if (!started) {
       started = true;
-      transcript.length = 0; // 首次输入：切换到 左对话/右回复 布局（标志作背景水印）
+      transcript.length = 0; // 首次输入：切换到 左对话/右回复 布局（无背景水印）
       replies.length = 0;
     }
     push(grey('❯ ') + bold(t));

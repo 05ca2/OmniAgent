@@ -39,14 +39,16 @@ try {
   const first = chunks.join('');
   const hasAlt = first.includes('\x1b[?1049h');
   const hasBrand = first.includes('ORcode');
-  const hasLogo = /[\u2800-\u28FF]/.test(first); // 品牌标志为盲文点阵（U+2800–U+28FF）
+  const hasLogo = first.includes('█'); // 左上角 ORCODE 像素字标（背景水印已移除）
+  const hasBgWatermark = /[\u2800-\u28FF]/.test(first); // 背景盲文点阵应已移除
   const hasCursor = /\x1b\[\d+;\d+H/.test(first);
   console.error = () => {};
-  realWrite('\n[SMOKE] alt-screen=' + hasAlt + ' brand=' + hasBrand + ' brailleLogo=' + hasLogo + ' cursorPos=' + hasCursor + ' bytes=' + first.length + '\n');
+  realWrite('\n[SMOKE] alt-screen=' + hasAlt + ' brand=' + hasBrand + ' pixelLogo=' + hasLogo + ' noBgWatermark=' + !hasBgWatermark + ' cursorPos=' + hasCursor + ' bytes=' + first.length + '\n');
   realWrite('[SMOKE] dir=' + tmp + '\n');
   if (!hasAlt) { realWrite('[FAIL] 未进入独立窗口\n'); exitCode = 1; }
   if (!hasBrand) { realWrite('[FAIL] 缺少品牌标识\n'); exitCode = 1; }
-  if (!hasLogo) { realWrite('[FAIL] 缺少盲文点阵标志\n'); exitCode = 1; }
+  if (!hasLogo) { realWrite('[FAIL] 缺少左上角像素字标\n'); exitCode = 1; }
+  if (hasBgWatermark) { realWrite('[FAIL] 背景盲文水印未清除\n'); exitCode = 1; }
   if (!hasCursor) { realWrite('[FAIL] 无光标定位序列\n'); exitCode = 1; }
   realWrite(exitCode === 0 ? '[SMOKE] PASS\n' : '[SMOKE] FAIL\n');
 } catch (e) {
