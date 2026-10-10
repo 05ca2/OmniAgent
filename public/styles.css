@@ -37,11 +37,8 @@ body {
   overflow: auto;
 }
 .brand { display: flex; align-items: center; gap: 9px; padding: 0 6px; }
-.logo {
-  width: 26px; height: 26px; border-radius: 7px;
-  background: var(--accent-grad); color: #fff;
-  display: grid; place-items: center; font-size: 14px; font-weight: 700;
-}
+/* 像素字标：等比缩放到侧栏高度（保持 222x42 比例 → 约 111x21） */
+.logo { width: 111px; height: 21px; display: block; }
 .brand-name { font-weight: 600; font-size: 16px; letter-spacing: .2px; }
 .brand-badge {
   font-size: 9px; padding: 2px 5px; border-radius: 4px; letter-spacing: .5px;
@@ -113,9 +110,10 @@ section[data-view="run"].view.active.busy { display: block; }
 .view.busy .hero { margin: 0 0 18px; padding-top: 0; }
 .hero-title { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .hero-logo {
-  width: 34px; height: 34px; border-radius: 9px;
+  width: 38px; height: 38px; border-radius: 9px;
   background: var(--accent-grad); color: #fff;
-  display: grid; place-items: center; font-size: 18px;
+  display: grid; place-items: center;
+  font-size: 13px; font-weight: 800; letter-spacing: .5px;
 }
 .hero-title h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: 1px; }
 .ver-badge {
